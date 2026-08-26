@@ -134,7 +134,7 @@ class LLMService:
                 'success': False
             }
     
-    def _call_api(self, prompt: str) -> str:
+    def _call_api(self, prompt: str, max_tokens: int = 500) -> str:
         """
         调用DeepSeek API（使用OpenAI SDK）
         
@@ -194,7 +194,7 @@ class LLMService:
                 }
             ],
             temperature=0.7,
-            max_tokens=500,
+            max_tokens=max_tokens,
             stream=False
         )
         

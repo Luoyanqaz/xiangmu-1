@@ -242,6 +242,7 @@ class RegionReportAISuggestionsView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    CACHE_SCHEMA_VERSION = 3
 
     def post(self, request):
         try:
@@ -345,7 +346,10 @@ class RegionReportAISuggestionsView(APIView):
         前端如果传了 _hash_base，则优先用 _hash_base。
         这样可以避免把样式、颜色、无关字段纳入 hash。
         """
-        hash_base = report_data.get("_hash_base") or report_data
+        hash_base = {
+            "schema_version": self.CACHE_SCHEMA_VERSION,
+            "report_data": report_data.get("_hash_base") or report_data,
+        }
 
         normalized = json.dumps(
             hash_base,

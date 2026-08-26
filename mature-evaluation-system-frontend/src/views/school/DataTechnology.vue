@@ -114,13 +114,13 @@
       <el-form-item prop="student_device_ratio">
         <template #label>
           <div class="label-with-hint">
-            <span>学校数字终端（如教学一体机、智能黑板、希沃白板）配备生机比（在校生人数与学生用机数量之比）？</span>
+            <span>学校学生数字终端配备生机比（在校生人数与学生用机数量之比）？</span>
             <el-popover placement="top-start" :width="350" trigger="hover" popper-class="custom-hint-popper">
               <template #reference>
                 <span class="hint-tag">填写说明</span>
               </template>
               <div class="hint-body">
-                <p class="hint-text">说明：数字终端包括多媒体一体机、智能黑板、希沃交互终端、教师办公电脑、学生机房计算机、学生平板等各类教学与学习智能终端设备。</p>
+                <p class="hint-text">学生数字终端：仅供学生独立自主操作、单人可用的计算机、平板等学习终端，例如学生专用台式电脑、学生平板、云桌面学生终端、学生机房计算机等。</p>
               </div>
             </el-popover>
           </div>
@@ -136,13 +136,13 @@
       <el-form-item prop="teacher_device_ratio">
         <template #label>
           <div class="label-with-hint">
-            <span>学校数字终端（如教学一体机、智能黑板、希沃白板）配备师机比（专任教师人数与专任教师用机数量之比） ？</span>
+            <span>学校教师数字终端配备师机比（专任教师人数与专任教师用机数量之比）？</span>
             <el-popover placement="top-start" :width="350" trigger="hover" popper-class="custom-hint-popper">
               <template #reference>
                 <span class="hint-tag">填写说明</span>
               </template>
               <div class="hint-body">
-                <p class="hint-text">说明：数字终端包括多媒体一体机、智能黑板、希沃交互终端、教师办公电脑、学生机房计算机、学生平板等各类教学与学习智能终端设备。</p>
+                <p class="hint-text">教师数字终端：可供教师备课、授课、教学使用的全部数字终端，包括教师个人办公设备、教师交互式教学大屏两类设备，例如教学一体机、智能黑板、希沃交互白板、教师办公电脑等。</p>
               </div>
             </el-popover>
           </div>
@@ -190,7 +190,7 @@
         <el-form-item prop="platform_build_mode">
         <template #label>
           <div class="label-with-hint">
-            <span>学校各类业务管理与教学平台的建设管理模式属于：</span>
+            <span>学校部署的各类业务管理、教学平台的建设模式属于：</span>
             <el-popover placement="top-start" :width="420" trigger="hover" popper-class="custom-hint-popper">
             </el-popover>
           </div>
@@ -203,14 +203,14 @@
         </el-radio-group>
       </el-form-item>
                     <div class="volume-hint">
-                说明：以上主要包括学校自主部署的各类服务平台，如教务系统、校园一卡通、综合素质评价平台、校园门禁出入管理系统、考试管理与题库组卷平台等。
+                说明：学校部署的各类业务管理或教学平台，主要指教务系统、校园一卡通、综合素质评价平台、考试管理与题库组卷平台、校园门禁出入管理系统等。
               </div>
         
         <template v-if="formData.platform_build_mode === 'self_built' || formData.platform_build_mode === 'mixed'">
         <el-form-item prop="security_certified_count">
             <template #label>
               <div class="label-with-hint">
-                <span>学校部署的各类平台通过国家安保等级认证的数量？</span>
+                <span>学校部署的各类平台通过网络安全等级保护测评的数量？</span>
                 <el-popover placement="top-start" :width="350" trigger="hover" popper-class="custom-hint-popper">
 
                 </el-popover>
@@ -227,7 +227,7 @@
           <el-form-item prop="security_certified_ratio">
             <template #label>
               <div class="label-with-hint">
-                <span>学校部署的各类平台通过国家安保等级认定的比例</span>
+                <span>学校部署的各类平台通过网络安全等级保护测评的比例</span>
                 <el-popover placement="top-start" :width="380" trigger="hover" popper-class="custom-hint-popper">
                 
                 </el-popover>
@@ -245,6 +245,13 @@
               </el-radio-group>
           </el-form-item>
 
+          <div class="volume-hint">
+            说明：请查阅学校部署的各类平台是否通过网络安全等级保护测评，持有二级及以上备案证明或等保测评报告。持有二级及以上材料视为通过，无相关材料或仅一级系统视为未通过。<br />
+            定级依据：
+            <a class="pdf-link" href="https://openstd.samr.gov.cn/bzgk/std/newGbInfo?hcno=63B89FFF7CC97EBBBED8A403396F0F00" target="_blank" rel="noopener noreferrer">GB/T 22240-2020《信息安全技术 网络安全等级保护定级指南》</a>。<br />
+            达标依据：
+            <a class="pdf-link" href="https://openstd.samr.gov.cn/bzgk/std/newGbInfo?hcno=BAFB47E8874764186BDB7865E8344DAF" target="_blank" rel="noopener noreferrer">GB/T 22239-2019《信息安全技术 网络安全等级保护基本要求》</a>。
+          </div>
 
           </template>
 

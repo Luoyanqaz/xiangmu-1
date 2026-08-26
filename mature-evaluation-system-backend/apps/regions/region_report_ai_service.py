@@ -384,12 +384,44 @@ class RegionReportAIService:
     这里撰写区域后续总体推进目标。
     """
 
-        result = self._call_ai(
-            prompt,
-            self._default_region_overall_advice(report_data)
-        )
+        default_text = self._default_region_overall_advice(report_data)
+        result = self._call_ai(prompt, default_text, max_tokens=2000)
+
+        # 区域整体建议一次包含 7 个板块，模型输出被截断时不能把半截内容写入缓存。
+        if not self._has_complete_region_overall_advice(result):
+            logger.warning("区域报告 AI 建议输出不完整，正在重试")
+            result = self._call_ai(prompt, default_text, max_tokens=2500)
+
+        if not self._has_complete_region_overall_advice(result):
+            logger.warning("区域报告 AI 建议重试后仍不完整，使用完整默认建议")
+            result = default_text
 
         return self._split_region_overall_advice(result, report_data)
+
+    def _has_complete_region_overall_advice(self, text: str) -> bool:
+        """检查区域整体建议的 7 个固定板块是否均已完整返回。"""
+        cleaned = self._clean_ai_report_text(text)
+        tags = [
+            "【总体判断】",
+            "【数据素养建议】",
+            "【数据制度建议】",
+            "【数据行为建议】",
+            "【数据资产建议】",
+            "【数据技术建议】",
+            "【总体战略目标】",
+        ]
+        positions = [cleaned.find(tag) for tag in tags]
+
+        if any(position < 0 for position in positions) or positions != sorted(positions):
+            return False
+
+        for index, tag in enumerate(tags):
+            start = positions[index] + len(tag)
+            end = positions[index + 1] if index + 1 < len(tags) else len(cleaned)
+            if not cleaned[start:end].strip():
+                return False
+
+        return True
 
 
     def _remove_heading(self, text: str, headings: list) -> str:
@@ -444,11 +476,35 @@ class RegionReportAIService:
 
     def _default_region_overall_advice(self, report_data: Dict[str, Any]) -> str:
         dim = report_data.get("dimension_average", {}) or {}
+        dimension_names = {
+            "literacy": "数据素养",
+            "institution": "数据制度",
+            "behavior": "数据行为",
+            "asset": "数据资产",
+            "technology": "数据技术",
+        }
+
+        def level_text(value):
+            score = self._score_5(value)
+            if score < 1.5:
+                return "初始水平"
+            if score < 3.0:
+                return "成长水平"
+            if score < 4.0:
+                return "成熟水平"
+            return "创新水平"
+
+        rows = [
+            f"【{dimension_names[key]}建议】\n"
+            f"{dimension_names[key]}维度平均得分为{self._score_5(dim.get(key)):.2f}分，处于{level_text(dim.get(key))}。"
+            f"{self._default_dimension_advice(key)}"
+            for key in dimension_names
+        ]
 
         return (
-            "从区域整体表现看，五个维度发展水平需要结合绝对分数区间进行综合判断。"
-            "后续应从区域统筹、标准建设、资源配置、协同推进、监测反馈和示范引领等方面持续优化，"
-            "围绕数据素养、数据制度、数据行为、数据资产和数据技术五个方面形成协同提升机制。"
+            f"【总体判断】\n{self._default_development_summary(report_data)}\n\n"
+            + "\n\n".join(rows)
+            + f"\n\n【总体战略目标】\n{self._default_conclusion()}"
         )
     # =========================
     # 二、区域发展建议总述
@@ -683,10 +739,10 @@ class RegionReportAIService:
     # 五、通用工具函数
     # =========================
 
-    def _call_ai(self, prompt: str, default_text: str) -> str:
+    def _call_ai(self, prompt: str, default_text: str, max_tokens: int = 500) -> str:
         """统一调用大模型，失败时返回默认文本"""
         try:
-            result = self.llm_service._call_api(prompt)
+            result = self.llm_service._call_api(prompt, max_tokens=max_tokens)
             result = str(result or "").strip()
 
             if not result:

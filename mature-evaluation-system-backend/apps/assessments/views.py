@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db.models import Count, Q
+from datetime import timedelta
 from .models import Assessment, InstitutionAssessment, BehaviorAssessment, AssetAssessment, TechnologyAssessment
 from .serializers import (
     AssessmentSerializer, InstitutionAssessmentSerializer,
@@ -25,6 +26,42 @@ from .scoring_service import  ScoringService
 from ..accounts.models import User
 
 logger = logging.getLogger(__name__)
+
+ASSESSMENT_DURATION_HOURS = 120
+
+
+def finalize_expired_draft_assessments(queryset):
+    """将超过填报期限仍未提交的评估按 0 分结算。"""
+    cutoff = timezone.now() - timedelta(hours=ASSESSMENT_DURATION_HOURS)
+    expired_ids = list(
+        queryset.filter(status='draft', created_at__lte=cutoff)
+        .values_list('id', flat=True)
+    )
+
+    if not expired_ids:
+        return []
+
+    completed_at = timezone.now()
+    with transaction.atomic():
+        Assessment.objects.filter(id__in=expired_ids, status='draft').update(
+            literacy_score=0,
+            institution_score=0,
+            behavior_score=0,
+            asset_score=0,
+            technology_score=0,
+            total_score=0,
+            maturity_level='initial',
+            status='completed',
+            completed_at=completed_at,
+            ai_suggestions={},
+        )
+        SurveyInstance.objects.filter(
+            assessment_id__in=expired_ids,
+            is_active=True,
+        ).update(is_active=False)
+
+    logger.info("已将超时未提交评估按 0 分结算: %s", expired_ids)
+    return expired_ids
 
 
 class AssessmentViewSet(viewsets.ModelViewSet):
@@ -114,14 +151,44 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             ).count(),
         }
 
+        # 报告页需要展示真实的全库平均分，避免前端长期使用 3.00 兜底值。
+        from apps.reports.report_data_service import ReportDataService
+        average_scores = ReportDataService(
+            assessment,
+            scoring_service=scoring_service if 'scoring_service' in locals() else None,
+        ).get_average_scores()
+
+        # 正常的大模型建议直接复用；仅对已识别为兜底文案的部分重新调用并更新缓存。
+        from apps.reports.report_ai_service import ReportAIService
+        suggestion_service = ReportAIService()
+        suggestion_report_data = {
+            'total_score': to_float(assessment.total_score),
+            'maturity_level': assessment.get_maturity_level_display(),
+            'dimension_scores': dimension_scores,
+            'secondary_scores': secondary_scores,
+            'observation_scores': observation_scores,
+        }
+        suggestions = suggestion_service.normalize_cached_suggestions(
+            suggestion_report_data,
+            assessment.ai_suggestions or {},
+        )
+        suggestions = suggestion_service.regenerate_fallback_suggestions(
+            suggestion_report_data,
+            suggestions,
+        )
+        if suggestions != (assessment.ai_suggestions or {}):
+            assessment.ai_suggestions = suggestions
+            assessment.save(update_fields=['ai_suggestions'])
+
         return Response({
             # 后端生成的 AI 建议
-            'suggestions': assessment.ai_suggestions or {},
+            'suggestions': suggestions,
 
             # 报告页需要的完整得分
             'dimension_scores': dimension_scores,
             'secondary_scores': secondary_scores,
             'observation_scores': observation_scores,
+            'average_scores': average_scores,
 
             # 问卷参评人数
             'participant_counts': participant_counts,
@@ -161,17 +228,23 @@ class AssessmentViewSet(viewsets.ModelViewSet):
 
         # 1. 超级管理员 (Admin)：拥有上帝视角，看全校数据
         if hasattr(user, 'is_admin_user') and user.is_admin_user():
-            return Assessment.objects.all()
+            queryset = Assessment.objects.all()
+            finalize_expired_draft_assessments(queryset)
+            return queryset
 
         # 2. 区域管理员 (Region Admin)：看自己管辖区域下的学校数据
         # 逻辑：Assessment -> School -> Region -> region_admin (当前用户)
         if hasattr(user, 'role') and user.role == 'region_admin':
-            return Assessment.objects.filter(school__region__region_admin=user)
+            queryset = Assessment.objects.filter(school__region__region_admin=user)
+            finalize_expired_draft_assessments(queryset)
+            return queryset
 
         # 3. 学校用户 (School)：只能看到自己学校的数据
         try:
             if hasattr(user, 'school'):
-                return Assessment.objects.filter(school=user.school)
+                queryset = Assessment.objects.filter(school=user.school)
+                finalize_expired_draft_assessments(queryset)
+                return queryset
         except Exception:
             pass
 
@@ -181,6 +254,9 @@ class AssessmentViewSet(viewsets.ModelViewSet):
         """创建新评估 - 允许历史记录"""
         user = request.user
         school = user.school
+
+        # 创建新评估前先结算已超时草稿，避免旧草稿永久阻塞新一轮评估。
+        finalize_expired_draft_assessments(Assessment.objects.filter(school=school))
 
         # 核心逻辑：检查是否【当前】有正在填写的评估
         # 只要状态不是 'completed'，就不允许开新的，必须把手头这份做完

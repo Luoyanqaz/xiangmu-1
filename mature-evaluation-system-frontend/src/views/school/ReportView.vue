@@ -84,7 +84,7 @@
         </h2>
         
         <p class="section-summary">
-          经综合评估，学校数据文化成熟度总得分为{{ reportData.total_score_percent?.toFixed(2) }}分，整体发展水平为{{ reportData.maturity_level }}。从五大维度来看，数据素养维度得分{{ dimensionScores.literacy?.toFixed(2) }}分，数据制度维度得分{{ dimensionScores.institution?.toFixed(2) }}分，数据行为维度得分{{ dimensionScores.behavior?.toFixed(2) }}分，数据资产维度得分{{ dimensionScores.asset?.toFixed(2) }}分，数据技术维度得分{{ dimensionScores.technology?.toFixed(2) }}分。
+          经综合评估，学校数据文化成熟度总得分为{{ reportData.total_score?.toFixed(2) }}分，整体发展水平为{{ reportData.maturity_level }}。从五大维度来看，数据素养维度得分{{ dimensionScores.literacy?.toFixed(2) }}分，数据制度维度得分{{ dimensionScores.institution?.toFixed(2) }}分，数据行为维度得分{{ dimensionScores.behavior?.toFixed(2) }}分，数据资产维度得分{{ dimensionScores.asset?.toFixed(2) }}分，数据技术维度得分{{ dimensionScores.technology?.toFixed(2) }}分。
         </p>
 
         <!-- 总分和等级展示 -->
@@ -755,8 +755,8 @@
                 <p>1. 学校平台建设管理模式为：{{ getPlatformBuildModeText() }}。</p>
 
                 <template v-if="technologyDetails.platform_build_mode === 'self_built' || technologyDetails.platform_build_mode === 'mixed'">
-                  <p>2. 学校{{ technologyDetails.security_certified_count || 0 }}类平台通过国家安保等级认定。</p>
-                  <p>3. 学校部署的各类平台通过国家安保等级认定的比例为：{{ getSecurityRatioText() }}。</p>
+                  <p>2. 学校{{ technologyDetails.security_certified_count || 0 }}类平台通过网络安全等级保护测评。</p>
+                  <p>3. 学校部署的各类平台通过网络安全等级保护测评的比例为：{{ getSecurityRatioText() }}。</p>
                 </template>
 
                 <template v-else-if="technologyDetails.platform_build_mode === 'external'">
@@ -807,7 +807,7 @@
               <strong>E2 数据安全水平</strong>：
               <ul>
                 <li>
-                  E21 数据安全合规与认证：根据学校各类业务管理与教学平台建设管理模式、部署的各类平台通过国家安保等级认证的数量和比例综合计分。
+                  E21 数据安全合规与认证：根据学校部署的各类业务管理、教学平台建设模式，以及相关平台通过网络安全等级保护测评的数量和比例综合计分。
                 </li>
                 <li>
                   E22 数据风险事件记录：根据2023年至2025年间学校是否发生数据风险事件计分。
