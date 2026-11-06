@@ -14,19 +14,25 @@ export default defineConfig({
     exclude: ['jspdf']
   },
   server: {
-    port: 5173,
+    port: 5174,
+    strictPort: true,
     host: '0.0.0.0',
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: 'http://127.0.0.1:8001',
         changeOrigin: true,
         secure: false,
       },
       '/media': {
-        target: 'http://127.0.0.1:8000',
+        target: 'http://127.0.0.1:8001',
         changeOrigin: true,
         secure: false
       }
     }
+  },
+  preview: {
+    port: 4174,
+    strictPort: true,
+    host: '127.0.0.1'
   }
 })

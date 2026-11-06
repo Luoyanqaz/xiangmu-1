@@ -10,6 +10,7 @@ from apps.assessments.models import Assessment, InstitutionAssessment, BehaviorA
 from apps.surveys.models import SurveyResponse, SurveyInstance
 from apps.assessments import scoring_config as config
 from apps.assessments.scoring_service import ScoringService
+from .statistics import school_rankings, score_details
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,7 @@ class ReportDataService:
             
             # 平均得分
             'average_scores': self.get_average_scores(),
+            'rankings': school_rankings(self.assessment),
             
             # 二级指标得分
             'secondary_scores': self.get_secondary_scores(),
@@ -135,19 +137,18 @@ class ReportDataService:
         """
         获取二级指标得分（百分制，5分制×20）
         """
-        if not self.scoring_service.secondary_scores:
-            self.scoring_service.calculate_all_scores()
-        # 转换为百分制
-        return {k: v  for k, v in self.scoring_service.secondary_scores.items()}
+        return self._get_score_details().get('secondary_scores', {})
 
     def get_observation_scores(self) -> Dict[str, float]:
         """
         获取观测点得分（百分制，5分制×20）
         """
-        if not self.scoring_service.observation_scores:
-            self.scoring_service.calculate_all_scores()
+        return self._get_score_details().get('observation_scores', {})
 
-        return {k: v for k, v in self.scoring_service.observation_scores.items()}
+    def _get_score_details(self):
+        if not hasattr(self, '_details'):
+            self._details = score_details(self.assessment)
+        return self._details
     
     def get_participant_counts(self) -> Dict[str, int]:
         """获取各类问卷的参评人数"""

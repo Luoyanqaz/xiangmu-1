@@ -1,0 +1,7 @@
+{
+  "folders": [{ "name": "xiangmu2", "path": "." }],
+  "settings": {
+    "window.title": "xiangmu2 — ${activeEditorShort}",
+    "python.defaultInterpreterPath": "${workspaceFolder}/mature-evaluation-system-backend/.venv/Scripts/python.exe"
+  }
+}

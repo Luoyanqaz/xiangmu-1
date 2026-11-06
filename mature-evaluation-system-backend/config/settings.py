@@ -5,8 +5,10 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# 加载环境变量
-load_dotenv()
+# Only load this project's environment, including when launched from an IDE.
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env', override=True)
+APP_INSTANCE_NAME = os.getenv('APP_INSTANCE_NAME', 'xiangmu2')
 
 # 导入Celery应用
 from .celery import app as celery_app
@@ -14,10 +16,9 @@ from .celery import app as celery_app
 __all__ = ('celery_app',)
 
 # Build paths inside the project
-BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production')
+SECRET_KEY = os.environ['SECRET_KEY']
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
@@ -63,11 +64,13 @@ MIDDLEWARE = [
 
 # CSRF配置
 CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'http://localhost:8081',
-    'http://127.0.0.1:8081',
+    'http://localhost:5174',
+    'http://127.0.0.1:5174',
+    'http://localhost:8001',
+    'http://127.0.0.1:8001',
 ]
+SESSION_COOKIE_NAME = f'{APP_INSTANCE_NAME}_sessionid'
+CSRF_COOKIE_NAME = f'{APP_INSTANCE_NAME}_csrftoken'
 
 ROOT_URLCONF = 'config.urls'
 
@@ -93,11 +96,12 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': os.getenv('DB_NAME', 'school_assessment'),
-        'USER': os.getenv('DB_USER', 'root'),
+        'NAME': os.getenv('DB_NAME', 'xiangmu2'),
+        'USER': os.getenv('DB_USER', 'xiangmu2_local'),
         'PASSWORD': os.getenv('DB_PASSWORD', ''),
         'HOST': os.getenv('DB_HOST', 'localhost'),
         'PORT': os.getenv('DB_PORT', '3306'),
+        'TEST': {'NAME': f'{APP_INSTANCE_NAME}_test'},
         'OPTIONS': {
             'charset': 'utf8mb4',
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
@@ -169,12 +173,10 @@ SIMPLE_JWT = {
 
 # CORS配置
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:8081",
-    "http://127.0.0.1:8081",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "http://localhost:8001",
+    "http://127.0.0.1:8001",
 ]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = [
@@ -199,26 +201,30 @@ CORS_ALLOW_METHODS = [
 
 # Redis配置
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
-REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
+REDIS_PORT = int(os.getenv('REDIS_PORT', 6380))
 REDIS_DB = int(os.getenv('REDIS_DB', 0))
 
 # Django缓存配置（使用django-redis）
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}',
+        'LOCATION': os.environ['REDIS_CACHE_URL'],
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
             'CONNECTION_POOL_KWARGS': {'max_connections': 50}
         },
-        'KEY_PREFIX': 'school_assessment',
+        'KEY_PREFIX': APP_INSTANCE_NAME,
         'TIMEOUT': 300,
     }
 }
 
 # Celery配置
-CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', f'redis://{REDIS_HOST}:{REDIS_PORT}/0')
-CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', f'redis://{REDIS_HOST}:{REDIS_PORT}/0')
+CELERY_BROKER_URL = os.environ['CELERY_BROKER_URL']
+CELERY_RESULT_BACKEND = os.environ['CELERY_RESULT_BACKEND']
+CELERY_TASK_DEFAULT_QUEUE = APP_INSTANCE_NAME
+CELERY_TASK_DEFAULT_EXCHANGE = APP_INSTANCE_NAME
+CELERY_TASK_DEFAULT_ROUTING_KEY = APP_INSTANCE_NAME
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -230,21 +236,22 @@ EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.qq.com')
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '1546414461@qq.com')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', 'ckhendemphogigah')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 # 系统配置
-FRONTEND_URL = 'http://8.155.152.174'
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://127.0.0.1:5174')
 SYSTEM_EMAIL_SIGNATURE = '此邮件由系统自动发送，请勿回复'
 
 # 大模型API配置（可选，也可在数据库中配置）
 LLM_API_PROVIDER = os.getenv('LLM_API_PROVIDER', 'openai')
+LLM_ALLOW_NETWORK = os.getenv('LLM_ALLOW_NETWORK', 'False').lower() == 'true'
 LLM_API_KEY = os.getenv('LLM_API_KEY', '')
 LLM_API_ENDPOINT = os.getenv('LLM_API_ENDPOINT', 'https://api.openai.com/v1')
 LLM_MODEL_NAME = os.getenv('LLM_MODEL_NAME', 'gpt-3.5-turbo')
 
 # DeepSeek API配置（使用OpenAI SDK）
-DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', 'sk-028ca182138140cb92efc9317c504615')
+DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', '')
 DEEPSEEK_API_ENDPOINT = 'https://api.deepseek.com'  # base_url不需要完整路径
 DEEPSEEK_MODEL_NAME = os.getenv('DEEPSEEK_MODEL_NAME', 'deepseek-chat')
 
@@ -256,7 +263,8 @@ ALIYUN_OSS_BUCKET_NAME = os.getenv('ALIYUN_OSS_BUCKET_NAME', 'mature')
 ALIYUN_OSS_CNAME = os.getenv('ALIYUN_OSS_CNAME', '')  # 自定义域名，可选
 
 # 使用OSS作为文件存储（使用自定义存储后端，兼容Django 4.x）
-if ALIYUN_OSS_ACCESS_KEY_ID and ALIYUN_OSS_ACCESS_KEY_SECRET:
+USE_OSS = os.getenv('USE_OSS', 'False').lower() == 'true'
+if USE_OSS and ALIYUN_OSS_ACCESS_KEY_ID and ALIYUN_OSS_ACCESS_KEY_SECRET:
     DEFAULT_FILE_STORAGE = 'utils.oss_storage.AliyunOSSStorage'
     # 构建MEDIA_URL
     endpoint_host = ALIYUN_OSS_ENDPOINT.replace('https://', '').replace('http://', '')
@@ -265,6 +273,7 @@ if ALIYUN_OSS_ACCESS_KEY_ID and ALIYUN_OSS_ACCESS_KEY_SECRET:
         MEDIA_URL = f'{ALIYUN_OSS_CNAME}/'
 
 # 日志配置
+(BASE_DIR / 'logs').mkdir(exist_ok=True)
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,

@@ -1,0 +1,10 @@
+# xiangmu2 local environments and runtime files
+.local/
+**/.venv/
+**/__pycache__/
+**/.env
+**/.env.local
+**/logs/
+**/staticfiles/
+**/node_modules/
+**/dist/

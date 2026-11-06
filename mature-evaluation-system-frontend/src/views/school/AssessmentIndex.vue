@@ -365,10 +365,10 @@
 
         </div>
 
-        <!-- 其他模块占位 -->
+        <!-- 模块加载占位 -->
         <div v-else class="module-content">
           <h2 class="module-title">{{ getModuleTitle(activeModule) }}</h2>
-          <el-empty description="该模块内容开发中，敬请期待..." />
+          <el-empty description="加载中，请稍等..." />
         </div>
       </main>
     </div>

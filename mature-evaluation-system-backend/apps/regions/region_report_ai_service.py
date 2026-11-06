@@ -29,6 +29,7 @@ class RegionReportAIService:
 
     def __init__(self):
         self.llm_service = LLMService()
+        self.used_fallback = False
 
     def _score_5(self, value: Any) -> float:
         """
@@ -59,6 +60,11 @@ class RegionReportAIService:
         """
         logger.info("开始生成区域报告建议")
 
+        if (not report_data.get('summary', {}).get('completed_school_count') or
+                not any(row.get('count') for row in report_data.get('dimension_statistics', []))):
+            return {'level_suggestions': {}, 'dimension_suggestions': {}, 'suggestion_mode': 'no_data',
+                    'development': {'summary': '暂无已完成评估，暂不生成发展判断。', 'items': [], 'conclusion': ''}}
+
         result = {
             "level_suggestions": {
                 "initial": self.generate_initial_level_suggestion(report_data),
@@ -68,6 +74,13 @@ class RegionReportAIService:
             },
             "development": self.generate_region_overall_ai_advice(report_data)
         }
+        from apps.reports.statistics import DIMENSIONS
+        items = result['development'].get('items', [])
+        result['dimension_suggestions'] = {
+            key: next((item.get('content', '') for item in items if item.get('dimension') == label), '')
+            for key, label, _ in DIMENSIONS
+        }
+        result['suggestion_mode'] = 'fallback' if self.used_fallback else 'ai'
 
         logger.info("区域报告建议生成完成")
         return result
@@ -384,6 +397,14 @@ class RegionReportAIService:
     这里撰写区域后续总体推进目标。
     """
 
+        prompt += '\n【一级及二级指标统计】\n' + json.dumps(
+            report_data.get('dimension_statistics', []), ensure_ascii=False
+        )
+        prompt += ('\n逐维度结合最高分、最低分、平均分、总体标准差和所属二级指标提出建议。'
+                   '优先关注二级指标中平均分较低的方面，说明如何分层支持学校；'
+                   '没有有效样本的指标不作水平判断，不把缺失值当作0分；'
+                   '单校标准差为0不代表区域发展均衡，不能从描述统计推断因果或显著性。'
+                   '各维度建议控制在120—200字。')
         default_text = self._default_region_overall_advice(report_data)
         result = self._call_ai(prompt, default_text, max_tokens=2000)
 
@@ -395,6 +416,7 @@ class RegionReportAIService:
         if not self._has_complete_region_overall_advice(result):
             logger.warning("区域报告 AI 建议重试后仍不完整，使用完整默认建议")
             result = default_text
+            self.used_fallback = True
 
         return self._split_region_overall_advice(result, report_data)
 
@@ -494,18 +516,38 @@ class RegionReportAIService:
                 return "成熟水平"
             return "创新水平"
 
-        rows = [
-            f"【{dimension_names[key]}建议】\n"
-            f"{dimension_names[key]}维度平均得分为{self._score_5(dim.get(key)):.2f}分，处于{level_text(dim.get(key))}。"
-            f"{self._default_dimension_advice(key)}"
-            for key in dimension_names
-        ]
+        rows = []
+        for key, name in dimension_names.items():
+            if dim.get(key) is None:
+                rows.append(f'【{name}建议】\n该维度暂无有效得分，建议先完善数据采集和核验，暂不判断发展水平。')
+            else:
+                rows.append(
+                    f'【{name}建议】\n{name}维度平均得分为{self._score_5(dim[key]):.2f}分，处于{level_text(dim[key])}。'
+                    f'{self._dimension_statistical_advice(report_data, key)}{self._default_dimension_advice(key)}'
+                )
 
         return (
             f"【总体判断】\n{self._default_development_summary(report_data)}\n\n"
             + "\n\n".join(rows)
             + f"\n\n【总体战略目标】\n{self._default_conclusion()}"
         )
+
+    def _dimension_statistical_advice(self, report_data, key):
+        row = next((item for item in report_data.get('dimension_statistics', []) if item['key'] == key), None)
+        if not row or not row['count']:
+            return '当前缺少有效指标数据，应先补齐数据后再开展发展诊断。'
+        text = (f"最高分{row['maximum']:.2f}分、最低分{row['minimum']:.2f}分，"
+                f"总体标准差{row['std_dev']:.2f}分。")
+        if row['count'] == 1:
+            text += '目前仅有1所学校，暂不判断校际差异。'
+        elif row['std_dev'] > 0:
+            text += '建议结合学校实际分类支持，并推动较高分学校分享具体做法。'
+        children = [child for child in row.get('secondary_indicators', []) if child['count']]
+        if children:
+            lowest = min(child['average'] for child in children)
+            names = '、'.join(child['label'] for child in children if child['average'] == lowest)
+            text += f'所属二级指标中，{names}平均分相对较低（{lowest:.2f}分），可作为后续改进重点。'
+        return text
     # =========================
     # 二、区域发展建议总述
     # =========================
@@ -746,6 +788,7 @@ class RegionReportAIService:
             result = str(result or "").strip()
 
             if not result:
+                self.used_fallback = True
                 return default_text
 
             # 防止模型返回 Markdown 包裹
@@ -754,6 +797,7 @@ class RegionReportAIService:
 
         except Exception as e:
             logger.error(f"区域报告 AI 建议生成失败: {str(e)}")
+            self.used_fallback = True
             return default_text
 
     def _region_name(self, report_data: Dict[str, Any]) -> str:
@@ -799,6 +843,8 @@ class RegionReportAIService:
 
         result = []
         for key, label in label_map.items():
+            if dimension_average.get(key) is None:
+                continue
             result.append({
                 "key": key,
                 "label": label,

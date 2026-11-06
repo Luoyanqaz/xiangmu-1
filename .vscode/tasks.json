@@ -1,0 +1,26 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "xiangmu2: Redis",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/local.ps1", "redis"],
+      "problemMatcher": []
+    },
+    {
+      "label": "xiangmu2: start all",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/local.ps1", "start"],
+      "problemMatcher": []
+    },
+    {
+      "label": "xiangmu2: stop managed services",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/local.ps1", "stop"],
+      "problemMatcher": []
+    }
+  ]
+}

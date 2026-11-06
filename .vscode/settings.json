@@ -1,0 +1,5 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/mature-evaluation-system-backend/.venv/Scripts/python.exe",
+  "window.title": "xiangmu2 — ${activeEditorShort}",
+  "files.watcherExclude": { "**/.local/**": true, "**/.venv/**": true }
+}

@@ -16,8 +16,10 @@ from .views_region_admin import (
     RegionAdminSchoolTemplateView,
 )
 from .views import RegionReportAISuggestionsView
+from apps.reports.statistics_views import RegionReportStatisticsView
 
 urlpatterns = [
+    path('region-report/statistics/', RegionReportStatisticsView.as_view(), name='region-report-statistics'),
     path("overview/", RegionAdminOverviewView.as_view(), name="region_admin_overview"),
     path("schools/", RegionAdminSchoolListView.as_view(), name="region_admin_school_list"),
     path("schools/create/", RegionAdminCreateSchoolView.as_view(), name="region_admin_school_create"),

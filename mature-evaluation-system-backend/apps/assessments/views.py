@@ -54,6 +54,9 @@ def finalize_expired_draft_assessments(queryset):
             status='completed',
             completed_at=completed_at,
             ai_suggestions={},
+            score_details={'version': 1, 'secondary_scores': {
+                key: 0 for key in ('A1', 'A2', 'B1', 'B2', 'B3', 'C1', 'C2', 'D1', 'D2', 'E1', 'E2')
+            }, 'observation_scores': {}},
         )
         SurveyInstance.objects.filter(
             assessment_id__in=expired_ids,
@@ -102,7 +105,7 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             except (TypeError, ValueError):
                 return default
 
-        # 一级维度得分：优先使用重新计算结果，失败时使用 Assessment 已保存结果
+        # 一级指标与位次使用同一份已保存的评估得分，查看报告不重新评分。
         dimension_scores = {
             'literacy': to_float(assessment.literacy_score),
             'institution': to_float(assessment.institution_score),
@@ -111,35 +114,12 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             'technology': to_float(assessment.technology_score),
         }
 
-        secondary_scores = {}
-        observation_scores = {}
+        # Scoring-time snapshots; legacy reconstruction never calls the LLM.
+        from apps.reports.statistics import score_details, school_rankings
+        details = score_details(assessment)
+        secondary_scores = details.get('secondary_scores', {})
+        observation_scores = details.get('observation_scores', {})
 
-        # 重新计算报告展示所需的二级指标和观测点得分
-        try:
-            scoring_service = ScoringService(assessment)
-
-            literacy_score = scoring_service.calculate_literacy_score()
-            institution_score = scoring_service.calculate_institution_score()
-            behavior_score = scoring_service.calculate_behavior_score()
-            asset_score = scoring_service.calculate_asset_score()
-            technology_score = scoring_service.calculate_technology_score()
-
-            dimension_scores = {
-                'literacy': to_float(literacy_score, dimension_scores['literacy']),
-                'institution': to_float(institution_score, dimension_scores['institution']),
-                'behavior': to_float(behavior_score, dimension_scores['behavior']),
-                'asset': to_float(asset_score, dimension_scores['asset']),
-                'technology': to_float(technology_score, dimension_scores['technology']),
-            }
-
-            secondary_scores = scoring_service.secondary_scores or {}
-            observation_scores = scoring_service.observation_scores or {}
-
-        except Exception as e:
-            # 不让计分异常影响报告基础数据返回
-            logger.error(f"报告 data 接口重新计算指标得分失败：{str(e)}", exc_info=True)
-
-        # 统计教师、学生问卷参评人数
         participant_counts = {
             'teacher': SurveyResponse.objects.filter(
                 instance__assessment=assessment,
@@ -155,7 +135,6 @@ class AssessmentViewSet(viewsets.ModelViewSet):
         from apps.reports.report_data_service import ReportDataService
         average_scores = ReportDataService(
             assessment,
-            scoring_service=scoring_service if 'scoring_service' in locals() else None,
         ).get_average_scores()
 
         # 正常的大模型建议直接复用；仅对已识别为兜底文案的部分重新调用并更新缓存。
@@ -189,6 +168,7 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             'secondary_scores': secondary_scores,
             'observation_scores': observation_scores,
             'average_scores': average_scores,
+            'rankings': school_rankings(assessment),
 
             # 问卷参评人数
             'participant_counts': participant_counts,

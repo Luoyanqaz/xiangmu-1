@@ -141,6 +141,8 @@ class LLMService:
         :param prompt: 提示词
         :return: API返回的文本
         """
+        if not getattr(settings, 'LLM_ALLOW_NETWORK', False):
+            raise ValueError('本地环境已关闭大模型网络调用；启用需设置 LLM_ALLOW_NETWORK=True')
         if not self.api_key:
             raise ValueError("未配置DeepSeek API密钥")
         

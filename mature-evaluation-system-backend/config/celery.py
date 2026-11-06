@@ -7,7 +7,7 @@ from celery import Celery
 # 设置Django settings模块
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 
-app = Celery('school_assessment')
+app = Celery('xiangmu2')
 
 # 从Django settings中加载配置
 app.config_from_object('django.conf:settings', namespace='CELERY')

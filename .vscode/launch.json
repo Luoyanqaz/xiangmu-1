@@ -1,0 +1,47 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "xiangmu2: Django 8001",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/mature-evaluation-system-backend/.venv/Scripts/python.exe",
+      "program": "${workspaceFolder}/mature-evaluation-system-backend/manage.py",
+      "args": ["runserver", "127.0.0.1:8001", "--noreload"],
+      "cwd": "${workspaceFolder}/mature-evaluation-system-backend",
+      "envFile": "${workspaceFolder}/mature-evaluation-system-backend/.env",
+      "env": { "PYTHONIOENCODING": "utf-8" },
+      "django": true,
+      "justMyCode": true,
+      "console": "integratedTerminal",
+      "preLaunchTask": "xiangmu2: Redis"
+    },
+    {
+      "name": "xiangmu2: Celery",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/mature-evaluation-system-backend/.venv/Scripts/python.exe",
+      "module": "celery",
+      "args": ["-A", "config", "worker", "-l", "info", "-P", "solo", "-Q", "xiangmu2", "--hostname=xiangmu2@%h"],
+      "cwd": "${workspaceFolder}/mature-evaluation-system-backend",
+      "envFile": "${workspaceFolder}/mature-evaluation-system-backend/.env",
+      "env": { "PYTHONIOENCODING": "utf-8" },
+      "justMyCode": true,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "xiangmu2: frontend 5174",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "node node_modules/vite/bin/vite.js --port 5174 --strictPort",
+      "cwd": "${workspaceFolder}/mature-evaluation-system-frontend"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "xiangmu2: full stack",
+      "configurations": ["xiangmu2: Django 8001", "xiangmu2: Celery", "xiangmu2: frontend 5174"],
+      "stopAll": true
+    }
+  ]
+}

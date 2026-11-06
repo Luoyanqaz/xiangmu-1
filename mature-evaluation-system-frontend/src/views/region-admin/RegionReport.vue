@@ -3,7 +3,7 @@
     <!-- 顶部操作区（不参与打印） -->
     <div class="toolbar no-print">
       <el-button @click="reloadAll" :loading="loading">刷新</el-button>
-      <el-button type="primary" @click="exportPDF" :loading="exporting">
+      <el-button type="primary" @click="exportPDF" :loading="exporting" :disabled="loading || aiLoading">
         导出 PDF
       </el-button>
     </div>
@@ -366,6 +366,15 @@
       
       <!-- 四、区域发展建议 -->
       <!-- 四、区域发展建议 -->
+<RegionDimensionAnalysis
+  :statistics="reportStatistics.dimension_statistics || []"
+  :suggestions="aiSuggestions.dimension_suggestions || {}"
+  :loading="aiLoading"
+  :mode="aiSuggestions.suggestion_mode"
+  :note="reportStatistics.statistics_note"
+  :secondary-note="reportStatistics.secondary_note"
+  :legacy-count="reportStatistics.legacy_assessment_count || 0"
+/>
 <section class="development-section">
   <div class="development-title-wrap">
     <div class="development-title">
@@ -423,6 +432,7 @@
 </template>
 
 <script setup>
+import RegionDimensionAnalysis from "@/components/RegionDimensionAnalysis.vue";
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import { ElMessage } from "element-plus";
 import * as echarts from "echarts";
@@ -441,6 +451,7 @@ const reportRef = ref(null);
 const region = ref(null);
 const summary = ref({});
 const assessments = ref([]);
+const reportStatistics = ref({});
 const aiSuggestions = ref({
   level_suggestions: {
     initial: "",
@@ -560,17 +571,10 @@ const regionText = computed(() => {
 
 const latestSchools = computed(() => keepLatestBySchool(assessments.value));
 
-const regionAverageScore = computed(() => average(latestSchools.value.map(x => x.total_score)));
+const regionAverageScore = computed(() => summary.value.avg_score ?? null);
 
-const highestScore = computed(() => {
-  if (!latestSchools.value.length) return 0;
-  return Math.max(...latestSchools.value.map(x => num(x.total_score)));
-});
-
-const lowestScore = computed(() => {
-  if (!latestSchools.value.length) return 0;
-  return Math.min(...latestSchools.value.map(x => num(x.total_score)));
-});
+const highestScore = computed(() => summary.value.highest_score ?? null);
+const lowestScore = computed(() => summary.value.lowest_score ?? null);
 
 const highestSchoolName = computed(() => {
   if (!topSchools.value.length) return "-";
@@ -579,19 +583,10 @@ const highestSchoolName = computed(() => {
 
 const lowestSchoolName = computed(() => {
   if (!bottomSchools.value.length) return "-";
-  return bottomSchools.value[0]?.school_name || "-";
+  return bottomSchools.value[bottomSchools.value.length - 1]?.school_name || "-";
 });
 
-const dimensionAverage = computed(() => {
-  const list = latestSchools.value;
-  return {
-    literacy: average(list.map(x => x.dimension_scores.literacy)),
-    institution: average(list.map(x => x.dimension_scores.institution)),
-    behavior: average(list.map(x => x.dimension_scores.behavior)),
-    asset: average(list.map(x => x.dimension_scores.asset)),
-    technology: average(list.map(x => x.dimension_scores.technology))
-  };
-});
+const dimensionAverage = computed(() => reportStatistics.value.dimension_average || {});
 
 const levelDistribution = computed(() => {
   const total = latestSchools.value.length || 0;
@@ -607,19 +602,17 @@ const levelDistribution = computed(() => {
   });
 });
 
-const topSchools = computed(() => {
-  return [...latestSchools.value]
-    .sort((a, b) => num(b.total_score) - num(a.total_score))
-    .slice(0, 5)
-    .map((x, i) => ({ ...x, rank: i + 1 }));
+const totalRanking = computed(() => {
+  const rows = latestSchools.value.filter(item => item.total_score != null)
+    .sort((a, b) => b.total_score - a.total_score || a.school_id - b.school_id);
+  let rank = 0;
+  return rows.map((item, i) => {
+    if (i === 0 || item.total_score !== rows[i - 1].total_score) rank = i + 1;
+    return { ...item, rank };
+  });
 });
-
-const bottomSchools = computed(() => {
-  return [...latestSchools.value]
-    .sort((a, b) => num(a.total_score) - num(b.total_score))
-    .slice(0, 5)
-    .map((x, i) => ({ ...x, rank: i + 1 }));
-});
+const topSchools = computed(() => totalRanking.value.slice(0, 5));
+const bottomSchools = computed(() => totalRanking.value.slice(-5));
 
 const levelAnalysis = computed(() => {
   return levelMeta.map((level) => {
@@ -661,7 +654,7 @@ const levelAnalysis = computed(() => {
 });
 
 function standardDeviation(values) {
-  const arr = values.map(num).filter((v) => Number.isFinite(v));
+  const arr = values.filter(v => v != null && Number.isFinite(Number(v))).map(Number);
 
   if (!arr.length) return 0;
 
@@ -751,7 +744,7 @@ async function loadAssessments() {
   params.set("page_size", "1000");
   params.set("status", "completed");
 
-  const { data: resp } = await apiGet(`/api/region-admin/assessments/?${params.toString()}`);
+  const { data: resp } = await apiGet(`/api/region-admin/region-report/statistics/?${params.toString()}`);
 
   if (!resp?.success) {
     throw new Error(resp?.message || "区域评估数据加载失败");
@@ -759,7 +752,9 @@ async function loadAssessments() {
 
   const data = resp.data || {};
   region.value = data.region || null;
-  summary.value = data.summary || {};
+  summary.value = data.summary || {}
+  reportStatistics.value = data
+  aiSuggestions.value = { level_suggestions: {}, development: { items: [] }, dimension_suggestions: {}, suggestion_mode: "" };
 
   if (data.region) {
     regionStore.setRegion(data.region);
@@ -780,6 +775,8 @@ async function loadAISuggestions() {
 
     const data = resp.data || {};
     aiSuggestions.value = {
+      dimension_suggestions: data.dimension_suggestions || {},
+      suggestion_mode: data.suggestion_mode || "",
       level_suggestions: {
         initial: data.level_suggestions?.initial || "",
         growing: data.level_suggestions?.growing || "",
@@ -810,92 +807,13 @@ const evaluationTime = computed(() => {
 })
 
 function buildAIPayload() {
-  const latestSchoolHashBase = latestSchools.value
-    .map(item => ({
-      assessment_id: item.assessment_id,
-      school_id: item.school_id,
-      school_name: item.school_name,
-      status: item.status,
-      maturity_level: item.maturity_level,
-      total_score: num(item.total_score),
-      completed_at: item.completed_at,
-      dimension_scores: {
-        literacy: num(item.dimension_scores?.literacy),
-        institution: num(item.dimension_scores?.institution),
-        behavior: num(item.dimension_scores?.behavior),
-        asset: num(item.dimension_scores?.asset),
-        technology: num(item.dimension_scores?.technology)
-      }
-    }))
-    .sort((a, b) => String(a.school_id).localeCompare(String(b.school_id)));
-
-  return {
-    region: region.value || {},
-    summary: {
-      ...(summary.value || {}),
-      school_count: summary.value?.school_count || 0,
-      assessment_count: assessments.value.length,
-      completed_school_count: latestSchools.value.length,
-      avg_score: num(regionAverageScore.value),
-      highest_score: num(highestScore.value),
-      lowest_score: num(lowestScore.value)
-    },
-    dimension_average: {
-      literacy: num(dimensionAverage.value.literacy),
-      institution: num(dimensionAverage.value.institution),
-      behavior: num(dimensionAverage.value.behavior),
-      asset: num(dimensionAverage.value.asset),
-      technology: num(dimensionAverage.value.technology)
-    },
-    level_distribution: levelDistribution.value.map(item => ({
-      key: item.key,
-      label: item.label,
-      range: item.range,
-      count: item.count,
-      ratio: item.ratio,
-      avg_score: num(item.avg_score)
-    })),
-    level_analysis: levelAnalysis.value.map(item => ({
-      key: item.key,
-      label: item.label,
-      count: item.count,
-      avg_score: num(item.avg_score),
-      dimension_average: {
-        literacy: num(item.dimension_average?.literacy),
-        institution: num(item.dimension_average?.institution),
-        behavior: num(item.dimension_average?.behavior),
-        asset: num(item.dimension_average?.asset),
-        technology: num(item.dimension_average?.technology)
-      }
-    })),
-    _hash_base: {
-      region_code: region.value?.code || region.value?.id || "",
-      school_count: summary.value?.school_count || 0,
-      completed_school_count: latestSchools.value.length,
-      avg_score: num(regionAverageScore.value),
-      highest_score: num(highestScore.value),
-      lowest_score: num(lowestScore.value),
-      dimension_average: {
-        literacy: num(dimensionAverage.value.literacy),
-        institution: num(dimensionAverage.value.institution),
-        behavior: num(dimensionAverage.value.behavior),
-        asset: num(dimensionAverage.value.asset),
-        technology: num(dimensionAverage.value.technology)
-      },
-      level_distribution: levelDistribution.value.map(item => ({
-        key: item.key,
-        count: item.count,
-        avg_score: num(item.avg_score)
-      })),
-      latest_schools: latestSchoolHashBase
-    }
-  };
+  return { region: region.value || {} };
 }
 
 function normalizeAssessment(item) {
   const school = item.school || {};
   const scores = item.scores || {};
-  const totalScore = num(scores.total_score ?? item.total_score);
+  const totalScore = scores.total_score == null ? null : num(scores.total_score);
   const maturity = item.maturity_level || scoreToLevel(totalScore);
 
   return {
@@ -910,11 +828,11 @@ function normalizeAssessment(item) {
     created_at: item.times?.created_at || item.created_at || "",
     completed_at: item.times?.completed_at || item.completed_at || "",
     dimension_scores: {
-      literacy: num(scores.literacy_score ?? item.literacy_score),
-      institution: num(scores.institution_score ?? item.institution_score),
-      behavior: num(scores.behavior_score ?? item.behavior_score),
-      asset: num(scores.asset_score ?? item.asset_score),
-      technology: num(scores.technology_score ?? item.technology_score)
+      literacy: scores.literacy_score == null ? null : num(scores.literacy_score),
+      institution: scores.institution_score == null ? null : num(scores.institution_score),
+      behavior: scores.behavior_score == null ? null : num(scores.behavior_score),
+      asset: scores.asset_score == null ? null : num(scores.asset_score),
+      technology: scores.technology_score == null ? null : num(scores.technology_score)
     }
   };
 }
@@ -1261,13 +1179,13 @@ function num(v) {
 }
 
 function average(arr) {
-  const nums = arr.map(num);
+  const nums = arr.filter(v => v != null && Number.isFinite(Number(v))).map(Number);
   if (!nums.length) return 0;
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
 
 function formatScore(v) {
-  return num(v).toFixed(2);
+  return v != null && Number.isFinite(Number(v)) ? Number(v).toFixed(2) : "—";
 }
 
 function getDevelopmentIcon(index) {

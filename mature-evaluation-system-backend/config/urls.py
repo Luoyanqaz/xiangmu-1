@@ -22,8 +22,8 @@ schema_view = get_schema_view(
 )
 
 urlpatterns = [
-    # 根路径重定向到admin
-    path('', RedirectView.as_view(url='/admin/', permanent=False)),
+    # 使用命名路由跳转到 Django 管理入口，避免地址变更后跳转失效。
+    path('', RedirectView.as_view(pattern_name='admin:index', permanent=False)),
     
     path('django-admin/', admin.site.urls),
     

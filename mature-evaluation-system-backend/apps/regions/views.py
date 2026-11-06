@@ -242,11 +242,14 @@ class RegionReportAISuggestionsView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
-    CACHE_SCHEMA_VERSION = 3
+    CACHE_SCHEMA_VERSION = 4
 
     def post(self, request):
+        from apps.reports.statistics_views import resolve_report_region
+        from apps.reports.statistics import region_statistics, region_ai_payload
+        scope = resolve_report_region(request, request.data.get('region') or {})
         try:
-            report_data = request.data or {}
+            report_data = region_ai_payload(region_statistics(scope))
 
             region = report_data.get("region") or {}
             region_code = self._get_region_code(region)
@@ -350,6 +353,8 @@ class RegionReportAISuggestionsView(APIView):
             "schema_version": self.CACHE_SCHEMA_VERSION,
             "report_data": report_data.get("_hash_base") or report_data,
         }
+        from django.conf import settings
+        hash_base['llm_network_enabled'] = getattr(settings, 'LLM_ALLOW_NETWORK', True)
 
         normalized = json.dumps(
             hash_base,
@@ -369,6 +374,7 @@ class RegionReportAISuggestionsView(APIView):
             "region": report_data.get("region") or {},
             "summary": report_data.get("summary") or {},
             "dimension_average": report_data.get("dimension_average") or {},
+            "dimension_statistics": report_data.get("dimension_statistics") or [],
             "level_distribution": report_data.get("level_distribution") or [],
             "level_analysis": report_data.get("level_analysis") or [],
             "_hash_base": report_data.get("_hash_base") or {}

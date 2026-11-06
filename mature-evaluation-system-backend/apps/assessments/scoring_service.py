@@ -33,8 +33,10 @@ logger = logging.getLogger(__name__)
 class ScoringService:
     """评估计分服务类"""
     
-    def __init__(self, assessment):
+    def __init__(self, assessment, read_only=False):
         self.assessment = assessment
+        self.read_only = read_only
+        self.unavailable_points = set()
         self.school = assessment.school
         self.observation_scores = {}  # 观测点得分（5分制）
         self.secondary_scores = {}    # 二级指标得分（5分制）
@@ -108,6 +110,12 @@ class ScoringService:
         logger.info(f"  D数据资产={d_score:.4f}, E数据技术={e_score:.4f}")
         logger.info(f"  总分={total_score_5:.4f}（5分制）, 等级={scores['maturity_level']}")
         
+        if not self.read_only:
+            self.assessment.score_details = {
+                'version': 1,
+                'secondary_scores': {key: self.secondary_scores.get(key, 0.0) for key in config.SECONDARY_WEIGHTS},
+                'observation_scores': dict(self.observation_scores),
+            }
         return scores
 
     def _normalize_score(self, raw_score: float, max_score: float) -> float:
@@ -922,6 +930,12 @@ class ScoringService:
     def _score_documents_with_llm(self, doc_files: list, doc_type: str, 
                                    max_score: float = 20.0, institution=None) -> float:
         """使用大模型评分文档质量"""
+        if self.read_only:
+            if doc_files:
+                # Legacy reports lack a numeric document-quality snapshot.
+                # Never call the model or invent a cached quality score while reading reports.
+                self.unavailable_points.add('B31' if doc_type == 'management' else 'B32')
+            return 0.0
         from apps.admin_panel.models import SystemConfig
         from .llm_service import LLMService
 

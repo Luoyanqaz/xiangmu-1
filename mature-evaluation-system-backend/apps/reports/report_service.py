@@ -31,7 +31,7 @@ class ReportService:
 
         try:
             # 第一步：计算得分（如果还没有计算）
-            if not self.assessment.total_score:
+            if self.assessment.total_score is None:
                 logger.info("步骤1: 计算评估得分")
                 scores = self.scoring_service.calculate_all_scores()
 

@@ -110,6 +110,7 @@
                 <span class="dim-score">{{ item.score?.toFixed(2) }}分</span>
               </div>
             </div>
+            <SchoolReportRank :ranking="reportData.rankings?.total" :reason="reportData.rankings?.unavailable_reason" />
           </div>
           <div class="overview-right">
             <div ref="overviewChart" class="chart-box" style="height: 350px;"></div>
@@ -117,6 +118,7 @@
         </div>
 
         <!-- AI评估建议 -->
+        <p class="ranking-scope-note">{{ reportData.rankings?.scope_note }} <span v-if="reportData.rankings?.unavailable_reason">{{ reportData.rankings.unavailable_reason }}</span></p>
         <div class="ai-suggestion">
           <p style="text-indent: 2em;"><strong>评估建议：</strong>{{ reportData.suggestions?.overall || '暂无建议' }}</p>
         </div>
@@ -136,6 +138,7 @@
         <!-- 计分规则说明 -->
         <p class="section-summary">
           学校数据素养得分为{{ dimensionScores.literacy?.toFixed(2) }}分。
+          <SchoolReportRank inline :ranking="reportData.rankings?.literacy" :reason="reportData.rankings?.unavailable_reason" />
           其中，教师数据素养得分为{{ secondaryScores.A1?.toFixed(2) }}分，
           学生数据素养得分为{{ secondaryScores.A2?.toFixed(2) }}分。
           具体情况如下：
@@ -215,6 +218,7 @@
 
         <p class="section-summary">
           学校数据制度得分为{{ formatScore(dimensionScores.institution) }}。
+          <SchoolReportRank inline :ranking="reportData.rankings?.institution" :reason="reportData.rankings?.unavailable_reason" />
           其中，数据组织机构得分{{ formatScore(secondaryScores.B1) }}，
           数据人员配备得分{{ formatScore(secondaryScores.B2) }}，
           数据管理文件得分{{ formatScore(secondaryScores.B3) }}。
@@ -379,6 +383,7 @@
 
         <p class="section-summary">
           学校数据行为得分为{{ formatScore(dimensionScores.behavior) }}。
+          <SchoolReportRank inline :ranking="reportData.rankings?.behavior" :reason="reportData.rankings?.unavailable_reason" />
           其中，数据行为监测得分{{ formatScore(secondaryScores.C1) }}，
           数据应用成效得分{{ formatScore(secondaryScores.C2) }}。
           具体情况如下：
@@ -524,6 +529,7 @@
         </h2>
         <p class="section-summary">
           学校数据资产得分为{{ formatScore(dimensionScores.asset) }}。
+          <SchoolReportRank inline :ranking="reportData.rankings?.asset" :reason="reportData.rankings?.unavailable_reason" />
           其中，数据资产意识得分{{ formatScore(secondaryScores.D1) }}，
           数据资产积累得分{{ formatScore(secondaryScores.D2) }}。
           具体情况如下：
@@ -705,6 +711,7 @@
 
         <p class="section-summary">
           学校数据技术得分为{{ formatScore(dimensionScores.technology) }}。
+          <SchoolReportRank inline :ranking="reportData.rankings?.technology" :reason="reportData.rankings?.unavailable_reason" />
           其中，数据基础设施得分{{ formatScore(secondaryScores.E1) }}，
           数据安全水平得分{{ formatScore(secondaryScores.E2) }}。
           具体情况如下：
@@ -841,6 +848,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getReportDataDetail  } from '@/api/assessment'
 import { getSchoolInfo } from '@/api/school'
 import { getAssessmentData } from '@/utils/assessments'
+import SchoolReportRank from '@/components/SchoolReportRank.vue'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
 import html2canvas from 'html2canvas'
@@ -957,17 +965,18 @@ const loadReportData = async (assessmentId) => {
 
       // --- B. 评估概况 ---
       report_date: raw.report_date || info.updated_at,
+      rankings: raw.rankings || {},
       maturity_level: raw.scores?.maturity_level_display || info.maturity_level_display || "未知",
-      total_score: 视觉处理(toF(raw.total_score || raw.scores?.total_score || info.total_score)),
+      total_score: 视觉处理(toF(raw.total_score ?? raw.scores?.total_score ?? info.total_score)),
       
       // --- C. 维度得分 (修正这里的路径) ---
       // 这里的 key 需要对应你后端 AssessmentSerializer 里的真实字段名
       dimension_scores: {
-        literacy: toF(raw.dimension_scores?.literacy || info.literacy_score),
-        institution: toF(raw.dimension_scores?.institution || info.institution_score),
-        behavior: toF(raw.dimension_scores?.behavior || info.behavior_score),
-        asset: toF(raw.dimension_scores?.asset || info.asset_score),
-        technology: toF(raw.dimension_scores?.technology || info.technology_score)
+        literacy: toF(raw.dimension_scores?.literacy ?? info.literacy_score),
+        institution: toF(raw.dimension_scores?.institution ?? info.institution_score),
+        behavior: toF(raw.dimension_scores?.behavior ?? info.behavior_score),
+        asset: toF(raw.dimension_scores?.asset ?? info.asset_score),
+        technology: toF(raw.dimension_scores?.technology ?? info.technology_score)
       },
 
       // --- D. 二级指标得分 (增加可选链防止崩掉) ---
@@ -1916,6 +1925,7 @@ const getTeacherRatioText = () => {
 </script>
 
 <style scoped>
+.ranking-scope-note { color: #64748b; font-size: 12px; line-height: 1.8; margin: 12px 0; }
 .report-container {
   min-height: 100vh;
   background-color: #f5f7fa;

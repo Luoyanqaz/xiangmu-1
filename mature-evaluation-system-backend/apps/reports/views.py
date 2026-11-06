@@ -14,6 +14,12 @@ from .report_data_service import ReportDataService
 logger = logging.getLogger(__name__)
 
 
+def can_access_report(user, assessment):
+    return (user.is_admin_user() or assessment.school.user_id == user.id or
+            (user.role == 'region_admin' and assessment.school.region_id and
+             assessment.school.region.region_admin_id == user.id))
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def generate_report(request, assessment_id):
@@ -25,12 +31,8 @@ def generate_report(request, assessment_id):
         assessment = Assessment.objects.get(id=assessment_id)
         
         # 权限检查：只有学校用户本人或管理员可以生成报告
-        if not request.user.is_admin():
-            if assessment.school.user != request.user:
-                return Response(
-                    {'error': '无权限生成此评估报告'},
-                    status=status.HTTP_403_FORBIDDEN
-                )
+        if not can_access_report(request.user, assessment):
+            return Response({'error': '无权限生成此评估报告'}, status=status.HTTP_403_FORBIDDEN)
         
         # 注意：不检查status状态，因为用户填写完数据后可能还没有提交
         # 报告生成时会自动计算得分并更新状态为completed
@@ -73,16 +75,12 @@ def get_report_data(request, assessment_id):
         assessment = Assessment.objects.get(id=assessment_id)
         
         # 权限检查
-        if not request.user.is_admin():
-            if assessment.school.user != request.user:
-                return Response(
-                    {'error': '无权限查看此评估报告'},
-                    status=status.HTTP_403_FORBIDDEN
-                )
+        if not can_access_report(request.user, assessment):
+            return Response({'error': '无权限查看此评估报告'}, status=status.HTTP_403_FORBIDDEN)
         
         # 如果还没有计算得分，先计算得分
         scoring_service = None
-        if not assessment.total_score:
+        if assessment.total_score is None:
             from apps.assessments.scoring_service import ScoringService
             from django.utils import timezone
             

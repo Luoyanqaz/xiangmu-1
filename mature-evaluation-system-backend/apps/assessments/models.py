@@ -41,6 +41,7 @@ class Assessment(models.Model):
     maturity_level = models.CharField('成熟度等级', max_length=20, choices=MATURITY_LEVEL_CHOICES, blank=True)
     report_file = models.FileField('报告文件', upload_to='reports/', blank=True)
     ai_suggestions = models.JSONField('AI评估建议', default=dict, blank=True)
+    score_details = models.JSONField('评分明细快照', default=dict, blank=True)
     
     started_at = models.DateTimeField('开始时间', auto_now_add=True)
     completed_at = models.DateTimeField('完成时间', null=True, blank=True)

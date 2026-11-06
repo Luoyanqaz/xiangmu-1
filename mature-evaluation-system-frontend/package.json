@@ -1,8 +1,9 @@
 {
-  "name": "school-assessment-frontend",
+  "name": "xiangmu2-frontend",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "test:reports": "node --test tests/report-components.test.mjs",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
