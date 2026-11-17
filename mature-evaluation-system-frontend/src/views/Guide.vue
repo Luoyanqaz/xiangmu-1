@@ -98,7 +98,7 @@
               
               <div class="maturity-level level-5">
                 <div class="level-header">
-                  <span class="level-name">初始级 [0.0，1.5]分</span>
+                  <span class="level-name">初始级 [0.0，1.5)分</span>
                 </div>
                 <p class="level-description">
                   数据文化处于起步阶段，意识薄弱，培训不足，缺乏专门的数据管理团队和制度，应用零散且缺乏系统性，数据安全存在隐患，数据文化尚未形成。
@@ -107,7 +107,7 @@
 
               <div class="maturity-level level-4">
                 <div class="level-header">
-                  <span class="level-name">成长级 [1.5，3.0]分</span>
+                  <span class="level-name">成长级 [1.5，3.0)分</span>
                 </div>
                 <p class="level-description">
                   数据文化逐步建立，数据意识有所提升，初步开展数据相关培训，数据管理初步规范，数据应用在部分领域开始探索，数据安全得到一定重视，数据文化处于发展阶段。
@@ -116,7 +116,7 @@
 
               <div class="maturity-level level-3">
                 <div class="level-header">
-                  <span class="level-name">成熟级 [3.0，4.0]分</span>
+                  <span class="level-name">成熟级 [3.0，4.0)分</span>
                 </div>
                 <p class="level-description">
                   数据文化高度成熟，数据意识成为师生共识，数据共享机制建立，数据管理高度规范化、自主化，数据安全与隐私保护处于领先水平，数据文化成为学校核心竞争力。

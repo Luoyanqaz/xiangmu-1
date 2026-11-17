@@ -168,6 +168,12 @@ const router = createRouter({
           meta: { requiresAuth: true, role: 'admin' }
         },
         {
+          path: 'school-type-reports',
+          name: 'admin-school-type-reports',
+          component: () => import('@/views/admin/SchoolTypeReport.vue'),
+          meta: { requiresAuth: true, role: 'admin' }
+        },
+        {
           path: 'news',
           name: 'admin-news',
           component: () => import('@/views/admin/NewsManage.vue'),

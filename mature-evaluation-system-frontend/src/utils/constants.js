@@ -48,29 +48,43 @@ export const SURVEY_TYPE_TEXT = {
 
 // 成熟度等级
 export const MATURITY_LEVELS = {
-  EXCELLENT: 'excellent',
-  GOOD: 'good',
-  FAIR: 'fair',
-  PASS: 'pass',
-  POOR: 'poor'
+  INITIAL: 'initial',
+  GROWING: 'growing',
+  MATURE: 'mature',
+  LEADING: 'leading'
 }
 
 // 成熟度等级文本映射
 export const MATURITY_LEVEL_TEXT = {
-  excellent: '卓越',
-  good: '优秀',
-  fair: '良好',
-  pass: '合格',
-  poor: '待改进'
+  initial: '初始级',
+  growing: '成长级',
+  mature: '成熟级',
+  leading: '创新级'
 }
 
 // 成熟度等级颜色映射
 export const MATURITY_LEVEL_COLOR = {
-  excellent: '#67C23A',
-  good: '#409EFF',
-  fair: '#E6A23C',
-  pass: '#F56C6C',
-  poor: '#909399'
+  initial: '#f27b7b',
+  growing: '#f0ab4d',
+  mature: '#67c98a',
+  leading: '#5ca4d9'
+}
+
+export const MATURITY_LEVEL_RANGES = {
+  initial: '[0.0, 1.5)',
+  growing: '[1.5, 3.0)',
+  mature: '[3.0, 4.0)',
+  leading: '[4.0, 5.0]'
+}
+
+export function scoreToMaturityLevel(value) {
+  if (value == null || typeof value === 'boolean' || String(value).trim() === '') return ''
+  const score = Number(value)
+  if (!Number.isFinite(score) || score < 0 || score > 5) return ''
+  if (score < 1.5) return 'initial'
+  if (score < 3) return 'growing'
+  if (score < 4) return 'mature'
+  return 'leading'
 }
 
 // 评估维度

@@ -3,6 +3,8 @@
 """
 from django.core.management.base import BaseCommand
 from apps.admin_panel.models import SystemConfig
+from apps.assessments.maturity import MATURITY_LEVELS
+import json
 
 
 class Command(BaseCommand):
@@ -40,7 +42,7 @@ class Command(BaseCommand):
             # 成熟度等级划分
             {
                 'config_key': 'maturity_levels',
-                'config_value': '{"excellent": 90, "good": 80, "fair": 70, "pass": 60, "poor": 0}',
+                'config_value': json.dumps(MATURITY_LEVELS, ensure_ascii=False),
                 'config_type': 'json',
                 'description': '成熟度等级划分标准（分数阈值）'
             },

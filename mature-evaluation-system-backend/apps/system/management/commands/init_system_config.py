@@ -4,6 +4,7 @@
 from django.core.management.base import BaseCommand
 from apps.system.models import SystemConfig
 import json
+from apps.assessments.maturity import MATURITY_LEVELS
 
 
 class Command(BaseCommand):
@@ -56,13 +57,7 @@ class Command(BaseCommand):
             # 成熟度等级划分
             {
                 'key': 'maturity_levels',
-                'value': json.dumps([
-                    {'min': 90, 'max': 100, 'level': 'excellent', 'name': '卓越'},
-                    {'min': 80, 'max': 89, 'level': 'good', 'name': '优秀'},
-                    {'min': 70, 'max': 79, 'level': 'fair', 'name': '良好'},
-                    {'min': 60, 'max': 69, 'level': 'pass', 'name': '合格'},
-                    {'min': 0, 'max': 59, 'level': 'poor', 'name': '待改进'}
-                ]),
+                'value': json.dumps(MATURITY_LEVELS, ensure_ascii=False),
                 'type': 'json',
                 'description': '成熟度等级划分标准'
             },

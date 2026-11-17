@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { parse, compileScript } from '@vue/compiler-sfc'
 import { createSSRApp } from 'vue'
 import { renderToString } from '@vue/server-renderer'
+import { MATURITY_LEVEL_RANGES, scoreToMaturityLevel } from '../src/utils/constants.js'
 
 const cacheRoot = resolve('node_modules/.cache')
 await mkdir(cacheRoot, { recursive: true })
@@ -22,6 +23,18 @@ async function component(name) {
 }
 const SchoolRank = await component('SchoolReportRank')
 const RegionAnalysis = await component('RegionDimensionAnalysis')
+const SchoolTypeReport = await component('SchoolTypeReportContent')
+
+test('maturity classification includes lower boundaries and the maximum score', () => {
+  for (const [score, expected] of [[0, 'initial'], [1.4999, 'initial'], [1.5, 'growing'], [2.9999, 'growing'], [3, 'mature'], [3.9999, 'mature'], [4, 'leading'], [5, 'leading']]) {
+    assert.equal(scoreToMaturityLevel(score), expected)
+    assert.equal(scoreToMaturityLevel(String(score)), expected)
+  }
+  for (const value of [null, undefined, '', ' ', true, -1, 5.001, NaN, Infinity]) {
+    assert.equal(scoreToMaturityLevel(value), '')
+  }
+  assert.deepEqual(Object.values(MATURITY_LEVEL_RANGES), ['[0.0, 1.5)', '[1.5, 3.0)', '[3.0, 4.0)', '[4.0, 5.0]'])
+})
 
 test('school rank renders both cohorts and never fabricates a zero rank', async () => {
   const html = await renderToString(createSSRApp(SchoolRank, {
@@ -53,7 +66,7 @@ test('regional sections render first/second level statistics, green technology a
   assert.match(html, /标准差/)
   assert.match(html, />0\.00</)
   assert.match(html, /依据数据基础设施得分，完善平台互联/)
-  assert.match(html, /基于统计数据的规则建议/)
+  assert.doesNotMatch(html, /基于统计数据的规则建议/)
 })
 
 test('empty indicator uses dashes and withholds development judgments', async () => {
@@ -63,4 +76,71 @@ test('empty indicator uses dashes and withholds development judgments', async ()
   }))
   assert.doesNotMatch(html, />0\.00</)
   assert.match(html, /暂无有效评估数据/)
+})
+
+function typeReportFixture(empty = false) {
+  const stats = { count: empty ? 0 : 1, average: empty ? null : 0, maximum: empty ? null : 0, minimum: empty ? null : 0, std_dev: empty ? null : 0 }
+  const school = { school_id: 1, school_name: '测试学校甲', score: 0, maturity_level: 'initial', maturity_label: '初始级' }
+  const ranking = { display_mode: 'full', schools: empty ? [] : [school], top_schools: [], bottom_schools: [] }
+  return {
+    region: { province: '测试省', city: '测试市', name: '一区' }, school_type_label: '小学', generated_at: '2026-11-10T08:00:00+08:00',
+    scope_note: '同区域同类型，最近一次已完成评估。', secondary_note: '管理者数据素养暂无得分。',
+    summary: { ...stats, completed_school_count: stats.count, school_count: stats.count }, total_ranking: ranking,
+    levels: ['initial', 'growing', 'mature', 'leading'].map((key, index) => ({
+      key, label: ['初始级', '成长级', '成熟级', '创新级'][index], score_range: MATURITY_LEVEL_RANGES[key],
+      ...stats, count: index === 0 ? stats.count : 0, ratio: index === 0 && !empty ? 100 : 0,
+      ...ranking, schools: index === 0 ? ranking.schools : [],
+    })),
+    dimensions: ['数据素养', '数据制度', '数据行为', '数据资产', '数据技术'].map((label, index) => ({
+      key: String(index), label, ...stats,
+      secondary_indicators: index === 0 ? [
+        { key: 'A1', label: '教师数据素养', ...stats },
+        { key: 'manager_literacy', label: '管理者数据素养', count: 0, average: null, unavailable_reason: '现行评分体系未设置该项得分，暂不统计。' },
+        { key: 'A2', label: '学生数据素养', ...stats },
+      ] : [{ key: 'E1', label: '二级指标', ...stats }],
+    })),
+  }
+}
+
+test('school type report follows reference order and renders populated levels and indicator statistics', async () => {
+  const html = await renderToString(createSSRApp(SchoolTypeReport, { report: typeReportFixture() }))
+  assert.ok(html.indexOf('学校总体成熟度') < html.indexOf('成熟度等级分布'))
+  assert.ok(html.indexOf('成熟度等级分布') < html.indexOf('学校总分排序'))
+  assert.ok(html.indexOf('学校总分排序') < html.indexOf('各成熟度等级学校表现'))
+  assert.ok(html.indexOf('各成熟度等级学校表现') < html.indexOf('各维度表现'))
+  assert.equal((html.match(/level-section /g) || []).length, 1)
+  assert.equal((html.match(/class="secondary-section"/g) || []).length, 5)
+  assert.match(html, /测试学校甲/)
+  assert.match(html, /100\.0%/)
+  assert.match(html, />0\.00</)
+  assert.doesNotMatch(html, /<td>管理者数据素养/)
+  assert.doesNotMatch(html, /现行评分体系未设置该项得分/)
+  assert.match(html, /完整排序/)
+  assert.doesNotMatch(html, />后5名</)
+})
+
+test('school type empty report preserves sections and displays missing scores as dashes', async () => {
+  const html = await renderToString(createSSRApp(SchoolTypeReport, { report: typeReportFixture(true) }))
+  assert.match(html, /该区域该类型学校暂无已完成评估/)
+  assert.match(html, /暂无有效总分数据/)
+  assert.match(html, />—</)
+  assert.doesNotMatch(html, />0\.00</)
+  assert.doesNotMatch(html, /测试学校甲/)
+  assert.equal((html.match(/level-section /g) || []).length, 0)
+  assert.match(html, /暂无法展示成熟度等级分布/)
+  assert.doesNotMatch(html, /成熟度等级占比环形图/)
+  assert.match(html, /成熟级及以上<\/span><strong>—<\/strong>/)
+})
+
+test('mature and leading percentage uses valid total scores rather than all completed schools', async () => {
+  const report = typeReportFixture()
+  report.summary = { ...report.summary, count: 6, completed_school_count: 8, school_count: 10 }
+  report.levels.forEach((level, index) => {
+    level.count = [2, 2, 1, 1][index]
+    level.ratio = Math.round(level.count / 6 * 1000) / 10
+  })
+  const html = await renderToString(createSSRApp(SchoolTypeReport, { report }))
+  assert.match(html, /纳入学校<\/span><strong>6/)
+  assert.match(html, /已完成评估 8 \/ 10 所/)
+  assert.match(html, /成熟级及以上<\/span><strong>33\.3%<\/strong><small>2 所学校/)
 })

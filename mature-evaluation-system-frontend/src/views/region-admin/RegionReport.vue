@@ -432,6 +432,7 @@
 </template>
 
 <script setup>
+import { MATURITY_LEVEL_RANGES, scoreToMaturityLevel } from "@/utils/constants";
 import RegionDimensionAnalysis from "@/components/RegionDimensionAnalysis.vue";
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import { ElMessage } from "element-plus";
@@ -476,28 +477,28 @@ const levelMeta = [
   {
     key: "initial",
     label: "初始级",
-    range: "[0.0, 1.5]",
+    range: MATURITY_LEVEL_RANGES.initial,
     color: "#f27b7b",
     light: "#f9dede"
   },
   {
     key: "growing",
     label: "成长级",
-    range: "[1.5, 3.0]",
+    range: MATURITY_LEVEL_RANGES.growing,
     color: "#f0ab4d",
     light: "#fae7c9"
   },
   {
     key: "mature",
     label: "成熟级",
-    range: "[3.0, 4.0]",
+    range: MATURITY_LEVEL_RANGES.mature,
     color: "#67c98a",
     light: "#dff4e7"
   },
   {
     key: "leading",
     label: "创新级",
-    range: "[4.0, 5.0]",
+    range: MATURITY_LEVEL_RANGES.leading,
     color: "#5ca4d9",
     light: "#dbeefa"
   }
@@ -814,7 +815,7 @@ function normalizeAssessment(item) {
   const school = item.school || {};
   const scores = item.scores || {};
   const totalScore = scores.total_score == null ? null : num(scores.total_score);
-  const maturity = item.maturity_level || scoreToLevel(totalScore);
+  const maturity = scoreToMaturityLevel(totalScore);
 
   return {
     id: item.id,
@@ -1152,15 +1153,6 @@ function getLevelSuggestion(key) {
       "领先默认"
   };
   return defaults[key] || "暂无建议。";
-}
-
-function scoreToLevel(score) {
-  const s = num(score)
-
-  if (s <= 1.5) return "initial"
-  if (s <= 3.0) return "growing"
-  if (s <= 4.0) return "mature"
-  return "leading"
 }
 
 function maturityLabel(v) {

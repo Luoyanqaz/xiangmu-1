@@ -41,6 +41,10 @@
           <el-icon><DataLine /></el-icon>
           <span>区校评估报告</span>
         </el-menu-item>
+        <el-menu-item index="/admin/school-type-reports">
+          <el-icon><DataAnalysis /></el-icon>
+          <span>学校类型评估报告</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 

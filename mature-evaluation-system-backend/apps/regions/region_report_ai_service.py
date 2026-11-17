@@ -4,7 +4,7 @@
 1. 初始级学校发展建议
 2. 成长级学校发展建议
 3. 成熟级学校发展建议
-4. 引领级学校发展建议
+4. 创新级学校发展建议
 5. 区域发展建议总述
 6. 数据素养发展建议
 7. 数据制度发展建议
@@ -20,6 +20,7 @@ from typing import Dict, Any, List
 import json
 
 from apps.assessments.llm_service import LLMService
+from apps.assessments.maturity import MATURITY_LABELS, determine_maturity_level
 
 logger = logging.getLogger(__name__)
 
@@ -508,13 +509,8 @@ class RegionReportAIService:
 
         def level_text(value):
             score = self._score_5(value)
-            if score < 1.5:
-                return "初始水平"
-            if score < 3.0:
-                return "成长水平"
-            if score < 4.0:
-                return "成熟水平"
-            return "创新水平"
+            label = MATURITY_LABELS.get(determine_maturity_level(score))
+            return label.replace("级", "水平") if label else "暂无有效得分"
 
         rows = []
         for key, name in dimension_names.items():

@@ -10,6 +10,7 @@ from apps.assessments.models import Assessment, InstitutionAssessment, BehaviorA
 from apps.surveys.models import SurveyResponse, SurveyInstance
 from apps.assessments import scoring_config as config
 from apps.assessments.scoring_service import ScoringService
+from apps.assessments.maturity import MATURITY_LABELS, determine_maturity_level
 from .statistics import school_rankings, score_details
 
 logger = logging.getLogger(__name__)
@@ -111,13 +112,7 @@ class ReportDataService:
     
     def get_maturity_level_display(self) -> str:
         """获取成熟度等级的中文显示"""
-        level_map = {
-            'initial': '初始级',
-            'growing': '成长级',
-            'mature': '成熟级',
-            'leading': '创新级',
-        }
-        return level_map.get(self.assessment.maturity_level, '未知')
+        return MATURITY_LABELS.get(determine_maturity_level(self.assessment.total_score), '未知')
     
     def get_dimension_scores(self) -> Dict[str, float]:
         """

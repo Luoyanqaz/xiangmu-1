@@ -6,6 +6,7 @@ from django.db.models import Count, OuterRef, Q, Subquery
 from django.db.models.functions import Coalesce
 
 from apps.assessments.models import Assessment
+from apps.assessments.maturity import determine_maturity_level
 from apps.assessments.scoring_service import ScoringService
 from apps.schools.models import School
 
@@ -177,7 +178,7 @@ def region_statistics(region):
         'dimension_statistics': dimensions,
         'dimension_average': {row['key']: row['average'] for row in dimensions},
         'assessments': [{
-            'id': item.id, 'status': item.status, 'maturity_level': item.maturity_level,
+            'id': item.id, 'status': item.status, 'maturity_level': determine_maturity_level(item.total_score),
             'school': {'id': item.school_id, 'name': item.school.name, 'school_type': item.school.school_type},
             'scores': {metric + '_score': float(value) if (value := valid_score(getattr(item, metric + '_score'))) is not None else None for metric in METRICS},
             'times': {'created_at': item.created_at.isoformat(), 'completed_at': item.completed_at.isoformat() if item.completed_at else None},

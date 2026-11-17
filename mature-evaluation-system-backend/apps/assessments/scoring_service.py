@@ -26,6 +26,7 @@ from decimal import Decimal
 from typing import Dict, List
 import logging
 from . import scoring_config as config
+from .maturity import determine_maturity_level
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +104,7 @@ class ScoringService:
         }
 
         # 确定成熟度等级（基于5分制）
-        scores['maturity_level'] = self.determine_maturity_level(total_score_5)
+        scores['maturity_level'] = self.determine_maturity_level(scores['total_score'])
 
         logger.info(f"评估 {self.assessment.id} 计分完成:")
         logger.info(f"  A数据素养={a_score:.4f}, B数据制度={b_score:.4f}, C数据行为={c_score:.4f}")
@@ -912,20 +913,9 @@ class ScoringService:
 
     def determine_maturity_level(self, total_score: float) -> str:
         """
-        根据最新规则确定等级：
-        等级一：初始级 [0.0, 1.5]
-        等级二：成长级 (1.5, 3.0]
-        等级三：成熟级 (3.0, 4.0]
-        等级四：创新级 (4.0, 5.0]
+        按统一规则判定：[0, 1.5)、[1.5, 3)、[3, 4)、[4, 5]。
         """
-        if total_score > 4.0:
-            return 'leading'  # 对应“创新级/引领级”
-        elif total_score > 3.0:
-            return 'mature'  # 对应“成熟级”
-        elif total_score > 1.5:
-            return 'growing'  # 对应“成长级”
-        else:
-            return 'initial'  # 对应“初始级”
+        return determine_maturity_level(total_score)
 
     def _score_documents_with_llm(self, doc_files: list, doc_type: str, 
                                    max_score: float = 20.0, institution=None) -> float:

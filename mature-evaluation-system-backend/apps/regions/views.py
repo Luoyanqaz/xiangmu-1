@@ -242,7 +242,7 @@ class RegionReportAISuggestionsView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
-    CACHE_SCHEMA_VERSION = 4
+    CACHE_SCHEMA_VERSION = 5
 
     def post(self, request):
         from apps.reports.statistics_views import resolve_report_region

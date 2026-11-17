@@ -31,7 +31,7 @@
               <span class="info-icon school">🏫</span>
               <span class="info-label">区域参评学校：</span>
               <span class="info-value">
-                {{ summary.school_count || latestSchools.length || 0 }} 所（小学/初中/一贯制）
+                {{ summary.school_count || latestSchools.length || 0 }} 所（小学/初中/一贯制）等
               </span>
             </div>
           </div>
@@ -364,10 +364,10 @@
           </div>
         </section>
       
-      <!-- 四、区域发展建议 -->
-      <!-- 四、区域发展建议 -->
+      <!-- 四、各维度表现分析 -->
 <RegionDimensionAnalysis
   :statistics="reportStatistics.dimension_statistics || []"
+  :development-summary="aiSuggestions.development?.summary || ''"
   :suggestions="aiSuggestions.dimension_suggestions || {}"
   :loading="aiLoading"
   :mode="aiSuggestions.suggestion_mode"
@@ -375,63 +375,22 @@
   :secondary-note="reportStatistics.secondary_note"
   :legacy-count="reportStatistics.legacy_assessment_count || 0"
 />
-<section class="development-section">
-  <div class="development-title-wrap">
-    <div class="development-title">
-      区域发展建议
-    </div>
-  </div>
-
-  <div class="development-card">
-    <!-- 顶部总结 -->
-    <div class="development-summary-box">
-      {{ defaultDevelopmentSummary }}
-    </div>
-
-    <!-- 五条建议 -->
-<div class="development-list">
-  <div
-    v-for="item in developmentItems"
-    :key="item.index"
-    class="development-item"
-    :class="`development-item-${item.index}`"
-  >
-    <div class="development-content">
-      <div class="development-item-title">
-        <span class="development-title-index">
-          {{ item.index }}.
-        </span>
-        <span>{{ item.dimension }} —— {{ item.title }}</span>
+      <div class="development-final-box">
+        <div class="development-final-title">总体战略目标</div>
+        <div class="development-final-text">
+          {{ aiSuggestions.development?.conclusion || "" }}
+        </div>
       </div>
-
-      <div class="development-item-text">
-        {{ item.content }}
-      </div>
-    </div>
-  </div>
-</div>
-
-    <!-- 总体结论 -->
-<div class="development-final-box">
-  <div class="development-final-title">
-    总体战略目标
-  </div>
-
-  <div class="development-final-text">
-    {{ defaultConclusion }}
-  </div>
-</div>
-  </div>
         <div class="report-footer">
         <p class="footer-note">-本报告由中小学校数据文化成熟度评估监测系统自动生成-</p>
       </div>
-</section>
     </div>
 
   </div>
 </template>
 
 <script setup>
+import { MATURITY_LEVEL_RANGES, scoreToMaturityLevel } from "@/utils/constants";
 import RegionDimensionAnalysis from "@/components/RegionDimensionAnalysis.vue";
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import { useRoute } from "vue-router";
@@ -471,11 +430,7 @@ const aiSuggestions = ref({
     mature: "",
     leading: ""
   },
-  development: {
-    summary: "",
-    items: [],
-    conclusion: ""
-  }
+  development: { summary: "", conclusion: "" }
 });
 
 const pieRef = ref(null);
@@ -488,28 +443,28 @@ const levelMeta = [
   {
     key: "initial",
     label: "初始级",
-    range: "[0.0, 1.5]",
+    range: MATURITY_LEVEL_RANGES.initial,
     color: "#f27b7b",
     light: "#f9dede"
   },
   {
     key: "growing",
     label: "成长级",
-    range: "[1.5, 3.0]",
+    range: MATURITY_LEVEL_RANGES.growing,
     color: "#f0ab4d",
     light: "#fae7c9"
   },
   {
     key: "mature",
     label: "成熟级",
-    range: "[3.0, 4.0]",
+    range: MATURITY_LEVEL_RANGES.mature,
     color: "#67c98a",
     light: "#dff4e7"
   },
   {
     key: "leading",
     label: "创新级",
-    range: "[4.0, 5.0]",
+    range: MATURITY_LEVEL_RANGES.leading,
     color: "#5ca4d9",
     light: "#dbeefa"
   }
@@ -693,60 +648,6 @@ const orderedLevelAnalysis = computed(() => {
   return levelAnalysis.value.filter(x => x.count > 0);
 });
 
-const developmentItems = computed(() => {
-  const items = aiSuggestions.value.development?.items
-
-  if (Array.isArray(items) && items.length > 0) {
-    return items.map((item, index) => ({
-      index: item.index || index + 1,
-      title: item.title || "发展建议",
-      dimension: item.dimension || "综合维度",
-      content: item.content || ""
-    }))
-  }
-
-  return [
-    {
-      index: 1,
-      title: "加强数据素养培养",
-      dimension: "数据素养",
-      content: "当前区域发展建议正在生成或暂未获取成功，请稍后刷新页面。"
-    },
-    {
-      index: 2,
-      title: "完善数据治理制度",
-      dimension: "数据制度",
-      content: "当前区域发展建议正在生成或暂未获取成功，请稍后刷新页面。"
-    },
-    {
-      index: 3,
-      title: "推动数据应用落地",
-      dimension: "数据行为",
-      content: "当前区域发展建议正在生成或暂未获取成功，请稍后刷新页面。"
-    },
-    {
-      index: 4,
-      title: "提升数据资产意识",
-      dimension: "数据资产",
-      content: "当前区域发展建议正在生成或暂未获取成功，请稍后刷新页面。"
-    },
-    {
-      index: 5,
-      title: "夯实数据技术支撑",
-      dimension: "数据技术",
-      content: "当前区域发展建议正在生成或暂未获取成功，请稍后刷新页面。"
-    }
-  ]
-})
-
-const defaultDevelopmentSummary = computed(() => {
-  return aiSuggestions.value.development?.summary || ""
-})
-
-const defaultConclusion = computed(() => {
-  return aiSuggestions.value.development?.conclusion || ""
-})
-
 async function reloadAll() {
   loading.value = true
 
@@ -801,7 +702,7 @@ async function loadAssessments() {
   region.value = data.region || null
   summary.value = data.summary || {}
   reportStatistics.value = data
-  aiSuggestions.value = { level_suggestions: {}, development: { items: [] }, dimension_suggestions: {}, suggestion_mode: "" }
+  aiSuggestions.value = { level_suggestions: {}, dimension_suggestions: {}, suggestion_mode: "", development: { summary: "", conclusion: "" } }
   assessments.value = (data.assessments || []).map(normalizeAssessment)
 }
 
@@ -833,9 +734,6 @@ async function loadAISuggestions() {
       },
       development: {
         summary: data.development?.summary || "",
-        items: Array.isArray(data.development?.items)
-          ? data.development.items
-          : [],
         conclusion: data.development?.conclusion || ""
       }
     }
@@ -864,7 +762,7 @@ function normalizeAssessment(item) {
   const school = item.school || {};
   const scores = item.scores || {};
   const totalScore = scores.total_score == null ? null : num(scores.total_score);
-  const maturity = item.maturity_level || scoreToLevel(totalScore);
+  const maturity = scoreToMaturityLevel(totalScore);
 
   return {
     id: item.id,
@@ -1202,15 +1100,6 @@ function getLevelSuggestion(key) {
       "领先默认"
   };
   return defaults[key] || "暂无建议。";
-}
-
-function scoreToLevel(score) {
-  const s = num(score)
-
-  if (s <= 1.5) return "initial"
-  if (s <= 3.0) return "growing"
-  if (s <= 4.0) return "mature"
-  return "leading"
 }
 
 function maturityLabel(v) {
@@ -2807,149 +2696,22 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
-/* ===== 区域发展建议 ===== */
-.development-section {
-  margin-top: 34px;
+.level-analysis-section.initial .level-analysis-header {
+  background: #ff7b82;
 }
 
-.development-title-wrap {
-  display: flex;
-  align-items: center;
-  margin-bottom: 18px;
-  border-left: 5px solid #28a7e8;
-  padding-left: 14px;
+.level-analysis-section.growing .level-analysis-header {
+  background: #ffb34d;
 }
 
-.development-title {
-  font-size: 22px;
-  font-weight: 900;
-  color: #1f3f66;
-  line-height: 1.2;
+.level-analysis-section.mature .level-analysis-header {
+  background: #5dade2;
 }
 
-.development-card {
-  background: #ffffff;
-  border: 1px solid #dfe7f1;
-  border-radius: 14px;
-  padding: 26px 28px 30px;
-  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04);
+.level-analysis-section.leading .level-analysis-header {
+  background: #65d18d;
 }
 
-.development-summary-box {
-  background: #f8fbff;
-  border: 1px solid #e3ebf5;
-  border-radius: 10px;
-  padding: 18px 22px;
-  color: #475569;
-  font-size: 15px;
-  line-height: 1.9;
-  text-indent: 2em;
-}
-
-/* 建议列表 */
-.development-list {
-  margin-top: 22px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.development-item {
-  display: flex;
-  gap: 18px;
-  align-items: flex-start;
-  min-height: 112px;
-  padding: 20px 22px;
-  border-radius: 12px;
-  border: 1px solid transparent;
-  box-sizing: border-box;
-}
-
-.development-item-1 {
-  background: linear-gradient(90deg, #f3f8ff, #ffffff);
-  border-color: #d9e9ff;
-}
-
-.development-item-2 {
-  background: linear-gradient(90deg, #f0fff8, #ffffff);
-  border-color: #d8f5e7;
-}
-
-.development-item-3 {
-  background: linear-gradient(90deg, #fffaf0, #ffffff);
-  border-color: #ffedc7;
-}
-
-.development-item-4 {
-  background: linear-gradient(90deg, #fff4f6, #ffffff);
-  border-color: #ffe0e7;
-}
-
-.development-item-5 {
-  background: linear-gradient(90deg, #f7f3ff, #ffffff);
-  border-color: #e7dcff;
-}
-
-.development-number {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  color: #ffffff;
-  font-size: 22px;
-  font-weight: 900;
-  text-align: center;
-  line-height: 48px;
-  flex-shrink: 0;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
-}
-
-.development-item-1 .development-number {
-  background: #3b82f6;
-}
-
-.development-item-2 .development-number {
-  background: #10b981;
-}
-
-.development-item-3 .development-number {
-  background: #f59e0b;
-}
-
-.development-item-4 .development-number {
-  background: #f43f5e;
-}
-
-.development-item-5 .development-number {
-  background: #8b5cf6;
-}
-
-.development-content {
-  flex: 1;
-}
-
-.development-item-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #1f2937;
-  font-size: 17px;
-  font-weight: 900;
-  line-height: 1.4;
-}
-
-.development-icon {
-  font-size: 17px;
-  line-height: 1;
-}
-
-.development-item-text {
-  margin-top: 10px;
-  color: #475569;
-  font-size: 15px;
-  line-height: 1.85;
-}
-
-/* 底部总体目标 */
 .development-final-box {
   margin-top: 24px;
   background: #0f172a;
@@ -2967,80 +2729,10 @@ onUnmounted(() => {
   margin-bottom: 12px;
 }
 
-.final-lightning {
-  color: #facc15;
-  font-size: 20px;
-}
-
 .development-final-text {
   color: #dbe4ef;
   font-size: 15px;
   line-height: 1.9;
-}
-
-.development-title-wrap {
-  margin-bottom: 24px;
-  text-align: center;
-}
-
-.development-title {
-  text-align: center;
-  font-size: 22px;
-  font-weight: 800;
-  color: #1f3f66;
-  letter-spacing: 0.5px;
-}
-
-.development-item {
-  display: block;
-  background: #ffffff;
-  border: 1px solid #edf2f7;
-  border-radius: 10px;
-  padding: 16px 18px;
-}
-
-.development-content {
-  width: 100%;
-}
-
-.development-item-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 15px;
-  font-weight: 800;
-  color: #1f2937;
-  margin-bottom: 8px;
-}
-
-.development-title-index {
-  font-size: 15px;
-  font-weight: 900;
-  color: #2563eb;
-  flex-shrink: 0;
-}
-
-.development-item-text {
-  font-size: 14px;
-  line-height: 1.9;
-  color: #475569;
-  text-indent: 2em;
-}
-
-.level-analysis-section.initial .level-analysis-header {
-  background: #ff7b82;
-}
-
-.level-analysis-section.growing .level-analysis-header {
-  background: #ffb34d;
-}
-
-.level-analysis-section.mature .level-analysis-header {
-  background: #5dade2;
-}
-
-.level-analysis-section.leading .level-analysis-header {
-  background: #65d18d;
 }
 
 .report-footer {
@@ -3055,8 +2747,6 @@ onUnmounted(() => {
 .report-shell .overview-text p,
 .report-shell .core-desc,
 .report-shell .level-ai-content,
-.report-shell .development-summary-box,
-.report-shell .development-item-text,
 .report-shell .development-final-text {
   text-align: justify;
   text-align-last: left;

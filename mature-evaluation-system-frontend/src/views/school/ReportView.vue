@@ -1563,7 +1563,7 @@ const getPerformanceText = (score) => {
 }
 
 const getLevelNumber = (level) => {
-  const map = { '初始级': '第1级', '成长级': '第2级', '成熟级': '第3级', '引领级': '第4级' }
+  const map = { '初始级': '第1级', '成长级': '第2级', '成熟级': '第3级', '创新级': '第4级' }
   return map[level] || ''
 }
 

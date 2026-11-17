@@ -2,6 +2,8 @@
 计分配置文件
 所有计分规则集中管理，便于后续调整
 """
+from .maturity import MATURITY_LEVELS as SHARED_MATURITY_LEVELS
+
 # 问卷题目范围和满分配置
 # ==================== 数据素养维度 (A) ====================
 
@@ -592,16 +594,11 @@ TOTAL_MAX_SCORE = 5.0
 # ==================== 等级划分（5分制） ====================
 
 # 成熟度等级划分（基于5分制总分）
-MATURITY_LEVELS = [
-    {'min': 4.0, 'max': 5.0, 'level': 'leading', 'name': '创新级'},
-    {'min': 3.0, 'max': 4.0, 'level': 'mature', 'name': '成熟级'},
-    {'min': 1.5, 'max': 3.0, 'level': 'growing', 'name': '成长级'},
-    {'min': 0.0, 'max': 1.5, 'level': 'initial', 'name': '初始级'}
-]
+MATURITY_LEVELS = list(reversed(SHARED_MATURITY_LEVELS))
 
 # 等级对应百分制（用于报告展示）
 MATURITY_LEVEL_PERCENT = {
-    'leading': {'min': 80, 'max': 100, 'name': '引领级'},
+    'leading': {'min': 80, 'max': 100, 'name': '创新级'},
     'mature': {'min': 60, 'max': 80, 'name': '成熟级'},
     'growing': {'min': 30, 'max': 60, 'name': '成长级'},
     'initial': {'min': 0, 'max': 30, 'name': '初始级'}

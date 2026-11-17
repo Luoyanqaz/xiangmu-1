@@ -93,7 +93,7 @@
 
     <el-form-item label="成熟度等级">
       <el-select v-model="query.maturity_level" clearable class="w-select">
-        <el-option label="引领级" value="leading" />
+        <el-option label="创新级" value="leading" />
         <el-option label="成熟级" value="mature" />
         <el-option label="成长级" value="growing" />
         <el-option label="初始级" value="initial" />
@@ -405,7 +405,7 @@ function statusTagType(s) {
 }
 
 function maturityLabel(v) {
-  const m = { leading: "引领级", mature: "成熟级", growing: "成长级", initial: "初始级" };
+  const m = { leading: "创新级", mature: "成熟级", growing: "成长级", initial: "初始级" };
   return m[v] || v || "-";
 }
 
