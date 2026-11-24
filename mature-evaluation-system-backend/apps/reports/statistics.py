@@ -8,6 +8,10 @@ from django.db.models.functions import Coalesce
 from apps.assessments.models import Assessment
 from apps.assessments.maturity import determine_maturity_level
 from apps.assessments.scoring_service import ScoringService
+from apps.assessments.scoring_config import (
+    ASSET_SCORING_RULES, BEHAVIOR_SCORING_RULES, INSTITUTION_SCORING_RULES,
+    LITERACY_SURVEY_CONFIG, TECHNOLOGY_SCORING_RULES,
+)
 from apps.schools.models import School
 
 
@@ -20,6 +24,19 @@ DIMENSIONS = (
 )
 METRICS = ('total',) + tuple(key for key, _, _ in DIMENSIONS)
 SECONDARY_KEYS = tuple(code for _, _, children in DIMENSIONS for code, _ in children)
+REGIONAL_OBSERVATIONS = {
+    'A1': LITERACY_SURVEY_CONFIG['teacher'],
+    'A2': LITERACY_SURVEY_CONFIG['student'],
+    'B1': {key: INSTITUTION_SCORING_RULES[key] for key in ('B11', 'B12')},
+    'B2': {key: INSTITUTION_SCORING_RULES[key] for key in ('B21', 'B22')},
+    'B3': {key: INSTITUTION_SCORING_RULES[key] for key in ('B31', 'B32')},
+    'C1': {key: BEHAVIOR_SCORING_RULES[key] for key in ('C11', 'C12')},
+    'C2': {key: BEHAVIOR_SCORING_RULES[key] for key in ('C21', 'C22', 'C23')},
+    'D1': {key: ASSET_SCORING_RULES[key] for key in ('D11', 'D12', 'D13')},
+    'D2': {key: ASSET_SCORING_RULES[key] for key in ('D21', 'D22')},
+    'E1': {key: TECHNOLOGY_SCORING_RULES[key] for key in ('E11', 'E12')},
+    'E2': {key: TECHNOLOGY_SCORING_RULES[key] for key in ('E21', 'E22')},
+}
 STATISTICS_NOTE = (
     '每所学校仅计入最近一次已完成评估（完成时间相同取记录编号较大者）；'
     '得分为0—5分，空值及超出范围的值不计入该指标，0分正常计入；'
@@ -147,6 +164,40 @@ def ranked_schools(assessments, field):
     return rows
 
 
+def regional_asset_volumes(assessments):
+    """Sum reportable GB and use the same schools for the population denominator."""
+    volumes = []
+    population = 0
+    missing_population_count = 0
+    for assessment in assessments:
+        asset = getattr(assessment, 'asset', None)
+        if not asset or not (asset.has_unified_data_management and asset.can_query_data_assets):
+            continue
+        known_values = [
+            getattr(asset, prefix + '_data_volume')
+            for prefix in ('teaching', 'teacher_student', 'digital_resource', 'campus_admin')
+            if getattr(asset, prefix + '_data_stat_method') != 'unable'
+            and getattr(asset, prefix + '_data_volume') is not None
+        ]
+        if asset.other_type_data_volume is not None:
+            known_values.append(asset.other_type_data_volume)
+        if not known_values or any(not value.is_finite() or value < 0 for value in known_values):
+            continue
+        volumes.append(ScoringService(assessment, read_only=True)._calculate_total_data_volume(asset))
+        teachers, students = assessment.school.teacher_count, assessment.school.student_count
+        if teachers is None or students is None or min(teachers, students) < 0 or teachers + students <= 0:
+            missing_population_count += 1
+        else:
+            population += teachers + students
+    total = sum(volumes) if volumes else None
+    per_capita = total / population if volumes and population and not missing_population_count else None
+    return {
+        'total_gb': round(total, 4) if total is not None else None,
+        'per_capita_gb': round(per_capita, 4) if per_capita is not None else None,
+        'school_count': len(volumes), 'missing_population_count': missing_population_count,
+    }
+
+
 def region_statistics(region):
     schools = schools_in_region(region)
     assessments = list(latest_completed().filter(school__in=schools)
@@ -161,12 +212,22 @@ def region_statistics(region):
         for code, name in children:
             child = describe_scores([details[item.id].get('secondary_scores', {}).get(code) for item in assessments])
             secondary.append({'key': code, 'label': name, **child, 'description': description(name, child)})
+            if code in REGIONAL_OBSERVATIONS:
+                secondary[-1]['observation_indicators'] = [
+                    {'key': point, 'label': config['name'], **describe_scores([
+                        details[item.id].get('observation_scores', {}).get(point)
+                        for item in assessments
+                    ])}
+                    for point, config in REGIONAL_OBSERVATIONS[code].items()
+                ]
         dimensions.append({
             'key': key, 'label': label, **stats, 'description': description(label, stats),
             'highest_schools': [row['school_name'] for row in ranked if row['score'] == stats['maximum']],
             'lowest_schools': [row['school_name'] for row in ranked if row['score'] == stats['minimum']],
             'top_schools': ranked[:5], 'bottom_schools': ranked[-5:], 'secondary_indicators': secondary,
         })
+        if key == 'asset':
+            dimensions[-1]['volume_summary'] = regional_asset_volumes(assessments)
     total = describe_scores([item.total_score for item in assessments])
     return {
         'region': region, 'statistics_note': STATISTICS_NOTE,

@@ -364,10 +364,10 @@
           </div>
         </section>
       
-      <!-- 四、区域发展建议 -->
-      <!-- 四、区域发展建议 -->
+      <!-- 四、各维度表现分析 -->
 <RegionDimensionAnalysis
   :statistics="reportStatistics.dimension_statistics || []"
+  :development-summary="aiSuggestions.development?.summary || ''"
   :suggestions="aiSuggestions.dimension_suggestions || {}"
   :loading="aiLoading"
   :mode="aiSuggestions.suggestion_mode"
@@ -375,57 +375,15 @@
   :secondary-note="reportStatistics.secondary_note"
   :legacy-count="reportStatistics.legacy_assessment_count || 0"
 />
-<section class="development-section">
-  <div class="development-title-wrap">
-    <div class="development-title">
-      区域发展建议
-    </div>
-  </div>
-
-  <div class="development-card">
-    <!-- 顶部总结 -->
-    <div class="development-summary-box">
-      {{ defaultDevelopmentSummary }}
-    </div>
-
-    <!-- 五条建议 -->
-    <div class="development-list">
-      <div
-        v-for="item in developmentItems"
-        :key="item.index"
-        class="development-item"
-        :class="`development-item-${item.index}`"
-      >
-        <div class="development-content">
-          <div class="development-item-title">
-            <span class="development-title-index">
-              {{ item.index }}.
-            </span>
-            <span>{{ item.dimension }} —— {{ item.title }}</span>
-          </div>
-
-          <div class="development-item-text">
-            {{ item.content }}
-          </div>
+      <div class="development-final-box">
+        <div class="development-final-title">总体战略目标</div>
+        <div class="development-final-text">
+          {{ aiSuggestions.development?.conclusion || "" }}
         </div>
       </div>
-    </div>
-
-    <!-- 总体结论 -->
-    <div class="development-final-box">
-      <div class="development-final-title">
-        总体战略目标
-      </div>
-
-      <div class="development-final-text">
-        {{ defaultConclusion }}
-      </div>
-    </div>
-  </div>
-    <div class="report-footer">
+        <div class="report-footer">
         <p class="footer-note">-本报告由中小学校数据文化成熟度评估监测系统自动生成-</p>
       </div>
-</section>
     </div>
 
   </div>
@@ -462,7 +420,6 @@ const aiSuggestions = ref({
   },
   development: {
     summary: "",
-    items: [],
     conclusion: ""
   }
 });
@@ -670,60 +627,6 @@ const orderedLevelAnalysis = computed(() => {
   return levelAnalysis.value.filter(x => x.count > 0);
 });
 
-const developmentItems = computed(() => {
-  const items = aiSuggestions.value.development?.items
-
-  if (Array.isArray(items) && items.length > 0) {
-    return items.map((item, index) => ({
-      index: item.index || index + 1,
-      title: item.title || "发展建议",
-      dimension: item.dimension || "综合维度",
-      content: item.content || ""
-    }))
-  }
-
-  return [
-    {
-      index: 1,
-      title: "加强数据素养培养",
-      dimension: "数据素养",
-      content: "当前区域发展建议正在生成或暂未获取成功，请稍后刷新页面。"
-    },
-    {
-      index: 2,
-      title: "完善数据治理制度",
-      dimension: "数据制度",
-      content: "当前区域发展建议正在生成或暂未获取成功，请稍后刷新页面。"
-    },
-    {
-      index: 3,
-      title: "推动数据应用落地",
-      dimension: "数据行为",
-      content: "当前区域发展建议正在生成或暂未获取成功，请稍后刷新页面。"
-    },
-    {
-      index: 4,
-      title: "提升数据资产意识",
-      dimension: "数据资产",
-      content: "当前区域发展建议正在生成或暂未获取成功，请稍后刷新页面。"
-    },
-    {
-      index: 5,
-      title: "夯实数据技术支撑",
-      dimension: "数据技术",
-      content: "当前区域发展建议正在生成或暂未获取成功，请稍后刷新页面。"
-    }
-  ]
-})
-
-const defaultDevelopmentSummary = computed(() => {
-  return aiSuggestions.value.development?.summary || ""
-})
-
-const defaultConclusion = computed(() => {
-  return aiSuggestions.value.development?.conclusion || ""
-})
-
 async function reloadAll() {
   loading.value = true;
   try {
@@ -755,7 +658,7 @@ async function loadAssessments() {
   region.value = data.region || null;
   summary.value = data.summary || {}
   reportStatistics.value = data
-  aiSuggestions.value = { level_suggestions: {}, development: { items: [] }, dimension_suggestions: {}, suggestion_mode: "" };
+  aiSuggestions.value = { level_suggestions: {}, development: { summary: "", conclusion: "" }, dimension_suggestions: {}, suggestion_mode: "" };
 
   if (data.region) {
     regionStore.setRegion(data.region);
@@ -786,7 +689,6 @@ async function loadAISuggestions() {
       },
       development: {
         summary: data.development?.summary || "",
-        items: Array.isArray(data.development?.items) ? data.development.items : [],
         conclusion: data.development?.conclusion || ""
       }
     };
@@ -2741,152 +2643,6 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
-/* ===== 区域发展建议 ===== */
-.development-section {
-  margin-top: 34px;
-}
-
-.development-title-wrap {
-  margin-bottom: 24px;
-  text-align: center;
-}
-
-.development-title {
-  text-align: center;
-  font-size: 22px;
-  font-weight: 800;
-  color: #1f3f66;
-  letter-spacing: 0.5px;
-}
-
-.development-card {
-  background: #ffffff;
-  border: 1px solid #dfe7f1;
-  border-radius: 14px;
-  padding: 26px 28px 30px;
-  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04);
-}
-
-.development-summary-box {
-  background: #f8fbff;
-  border: 1px solid #e3ebf5;
-  border-radius: 10px;
-  padding: 18px 22px;
-  color: #475569;
-  font-size: 15px;
-  line-height: 1.9;
-  text-indent: 2em;
-}
-
-/* 建议列表 */
-.development-list {
-  margin-top: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.development-item {
-  display: block;
-  background: #ffffff;
-  border: 1px solid #edf2f7;
-  border-radius: 10px;
-  padding: 16px 18px;
-}
-
-.development-content {
-  width: 100%;
-}
-
-.development-item-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 15px;
-  font-weight: 800;
-  color: #1f2937;
-  margin-bottom: 8px;
-}
-
-.development-title-index {
-  font-size: 15px;
-  font-weight: 900;
-  color: #2563eb;
-  flex-shrink: 0;
-}
-
-.development-item-text {
-  font-size: 14px;
-  line-height: 1.9;
-  color: #475569;
-  text-indent: 2em;
-}
-
-.development-item-1 {
-  background: linear-gradient(90deg, #f3f8ff, #ffffff);
-  border-color: #d9e9ff;
-}
-
-.development-item-2 {
-  background: linear-gradient(90deg, #f0fff8, #ffffff);
-  border-color: #d8f5e7;
-}
-
-.development-item-3 {
-  background: linear-gradient(90deg, #fffaf0, #ffffff);
-  border-color: #ffedc7;
-}
-
-.development-item-4 {
-  background: linear-gradient(90deg, #fff4f6, #ffffff);
-  border-color: #ffe0e7;
-}
-
-.development-item-5 {
-  background: linear-gradient(90deg, #f7f3ff, #ffffff);
-  border-color: #e7dcff;
-}
-
-.development-number {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  color: #ffffff;
-  font-size: 22px;
-  font-weight: 900;
-  text-align: center;
-  line-height: 48px;
-  flex-shrink: 0;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
-}
-
-.development-item-1 .development-number {
-  background: #3b82f6;
-}
-
-.development-item-2 .development-number {
-  background: #10b981;
-}
-
-.development-item-3 .development-number {
-  background: #f59e0b;
-}
-
-.development-item-4 .development-number {
-  background: #f43f5e;
-}
-
-.development-item-5 .development-number {
-  background: #8b5cf6;
-}
-
-
-.development-icon {
-  font-size: 17px;
-  line-height: 1;
-}
-
-
 /* 底部总体目标 */
 .development-final-box {
   margin-top: 24px;
@@ -2949,8 +2705,6 @@ onUnmounted(() => {
 .report-shell .overview-text p,
 .report-shell .core-desc,
 .report-shell .level-ai-content,
-.report-shell .development-summary-box,
-.report-shell .development-item-text,
 .report-shell .development-final-text {
   text-align: justify;
   text-align-last: left;

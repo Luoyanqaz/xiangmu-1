@@ -269,7 +269,10 @@ class RegionReportAISuggestionsView(APIView):
             ).first()
 
             # 命中缓存：不调用大模型
-            if cache and cache.data_hash == data_hash and cache.suggestions:
+            from apps.reports import final_advice
+            saved = cache.suggestions if cache and cache.data_hash == data_hash else {}
+            if saved and not (final_advice.enabled() and saved.get('suggestion_mode') == 'fallback'
+                              and 'action_sources' not in saved):
                 return Response({
                     "success": True,
                     "message": "success",
@@ -354,6 +357,8 @@ class RegionReportAISuggestionsView(APIView):
             "report_data": report_data.get("_hash_base") or report_data,
         }
         from django.conf import settings
+        if settings.REPORT_ADVICE_VERSION != 'legacy':
+            hash_base['report_advice_version'] = settings.REPORT_ADVICE_VERSION
         hash_base['llm_network_enabled'] = getattr(settings, 'LLM_ALLOW_NETWORK', True)
 
         normalized = json.dumps(

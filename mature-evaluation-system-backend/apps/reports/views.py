@@ -109,12 +109,12 @@ def get_report_data(request, assessment_id):
         print("111")
 
         # 获取AI建议（优先从数据库读取）
-        if assessment.ai_suggestions:
+        from .report_ai_service import ReportAIService
+        if ReportAIService.can_reuse(assessment.ai_suggestions):
             logger.info(f"使用已缓存的AI建议")
             report_data['suggestions'] = assessment.ai_suggestions
         else:
             logger.info(f"未找到缓存的AI建议，开始实时生成...")
-            from .report_ai_service import ReportAIService
             ai_service = ReportAIService()
             suggestions = ai_service.generate_all_suggestions(report_data)
             report_data['suggestions'] = suggestions

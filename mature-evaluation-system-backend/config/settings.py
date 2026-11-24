@@ -246,6 +246,10 @@ SYSTEM_EMAIL_SIGNATURE = '此邮件由系统自动发送，请勿回复'
 # 大模型API配置（可选，也可在数据库中配置）
 LLM_API_PROVIDER = os.getenv('LLM_API_PROVIDER', 'openai')
 LLM_ALLOW_NETWORK = os.getenv('LLM_ALLOW_NETWORK', 'False').lower() == 'true'
+# 恢复旧版报告提示语和规则：在后端 .env 设置 REPORT_ADVICE_VERSION=legacy，重启后端和 worker。
+REPORT_ADVICE_VERSION = os.getenv('REPORT_ADVICE_VERSION', '20261124').strip()
+if REPORT_ADVICE_VERSION not in ('20261124', '20261120', 'legacy'):
+    raise ValueError('REPORT_ADVICE_VERSION must be 20261124, 20261120 or legacy')
 LLM_API_KEY = os.getenv('LLM_API_KEY', '')
 LLM_API_ENDPOINT = os.getenv('LLM_API_ENDPOINT', 'https://api.openai.com/v1')
 LLM_MODEL_NAME = os.getenv('LLM_MODEL_NAME', 'gpt-3.5-turbo')

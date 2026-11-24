@@ -183,7 +183,9 @@ def check():
     assert settings.SESSION_COOKIE_NAME == 'xiangmu2_sessionid'
     assert settings.CSRF_COOKIE_NAME == 'xiangmu2_csrftoken'
     assert settings.EMAIL_BACKEND.endswith('console.EmailBackend')
-    assert not settings.LLM_ALLOW_NETWORK
+    if settings.LLM_ALLOW_NETWORK:
+        from apps.assessments.llm_service import LLMService
+        assert LLMService().api_key, 'Online model calls require a configured API key'
     assert settings.CACHES['default']['KEY_PREFIX'] == 'xiangmu2'
     for url in [settings.CACHES['default']['LOCATION'], settings.CELERY_BROKER_URL, settings.CELERY_RESULT_BACKEND]:
         from urllib.parse import urlsplit

@@ -66,6 +66,29 @@ class RegionReportAIService:
             return {'level_suggestions': {}, 'dimension_suggestions': {}, 'suggestion_mode': 'no_data',
                     'development': {'summary': '暂无已完成评估，暂不生成发展判断。', 'items': [], 'conclusion': ''}}
 
+        from apps.reports import final_advice
+        if final_advice.enabled():
+            from apps.reports.statistics import DIMENSIONS
+            sections, mode, sources = final_advice.generate(report_data, self.llm_service, region=True)
+            return {
+                'level_suggestions': {
+                    'initial': self.generate_initial_level_suggestion(report_data),
+                    'growing': self.generate_growing_level_suggestion(report_data),
+                    'mature': self.generate_mature_level_suggestion(report_data),
+                    'leading': self.generate_leading_level_suggestion(report_data),
+                },
+                'dimension_suggestions': {key: sections[key] for key, _, _ in DIMENSIONS},
+                'suggestion_mode': mode,
+                'action_sources': sources,
+                'development': {
+                    'summary': sections['overall'],
+                    'items': [{'index': i, 'dimension': name, 'title': name + '发展建议', 'content': sections[key]}
+                              for i, (key, name, _) in enumerate(DIMENSIONS, 1)],
+                    # 定稿覆盖总评及五维，保留原页面独立的总体目标，避免无条件判定存在低分项。
+                    'conclusion': '推动校际经验共享和持续监测，提升区域教育数据在教学与治理中的应用水平。',
+                },
+            }
+        # 原版（legacy）入口：保留原区域提示语、解析器和统计建议，切换配置即可恢复。
         result = {
             "level_suggestions": {
                 "initial": self.generate_initial_level_suggestion(report_data),

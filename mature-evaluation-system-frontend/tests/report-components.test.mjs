@@ -78,6 +78,30 @@ test('empty indicator uses dashes and withholds development judgments', async ()
   assert.match(html, /暂无有效评估数据/)
 })
 
+test('regional literacy radar renders only in literacy, before advice, with distinct teacher/student scores', async () => {
+  const children = ['A1', 'A2'].map((key, role) => ({
+    key, label: role ? '学生数据素养' : '教师数据素养', average: 2,
+    observation_indicators: Array.from({ length: 5 }, (_, index) => ({
+      key: `${role ? 'A3' : 'A1'}${index + 1}`, average: role ? 4 : index,
+    })),
+  }))
+  const dimension = { key: 'literacy', label: '数据素养', count: 2, secondary_indicators: children }
+  const html = await renderToString(createSSRApp(RegionAnalysis, {
+    statistics: [dimension, { key: 'behavior', label: '数据行为', count: 0, secondary_indicators: [] }],
+  }))
+  assert.equal((html.match(/class="literacy-radar-section"/g) || []).length, 1)
+  assert.equal((html.match(/class="literacy-radar-chart"/g) || []).length, 2)
+  assert.ok(html.indexOf('所属二级指标得分情况') < html.indexOf('教师与学生数据素养雷达图'))
+  assert.ok(html.indexOf('教师与学生数据素养雷达图') < html.indexOf('针对数据素养维度的发展建议'))
+  assert.match(html, /教师数据素养，区域学校均分（满分5分）：数据意识与思维0\.00/)
+  assert.match(html, /学生数据素养，区域学校均分（满分5分）：数据意识与思维4\.00/)
+  assert.doesNotMatch(html, /暂无完整五维数据/)
+  children[0].observation_indicators[0].average = null
+  const missing = await renderToString(createSSRApp(RegionAnalysis, { statistics: [dimension] }))
+  assert.match(missing, /暂无完整五维数据/)
+  assert.match(missing, /数据意识与思维：—/)
+})
+
 function typeReportFixture(empty = false) {
   const stats = { count: empty ? 0 : 1, average: empty ? null : 0, maximum: empty ? null : 0, minimum: empty ? null : 0, std_dev: empty ? null : 0 }
   const school = { school_id: 1, school_name: '测试学校甲', score: 0, maturity_level: 'initial', maturity_label: '初始级' }

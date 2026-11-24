@@ -3,9 +3,11 @@
 负责调用DeepSeek生成各个维度的评估建议
 """
 import logging
+from django.conf import settings
 from typing import Dict, List, Any
 from apps.assessments.llm_service import LLMService
 from apps.assessments.maturity import determine_maturity_level
+from . import final_advice
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +16,16 @@ class ReportAIService:
     """报告AI建议生成服务"""
 
     SUGGESTION_SCHEMA_VERSION = 4
+
+    @staticmethod
+    def can_reuse(cached):
+        if not cached:
+            return False
+        if final_advice.enabled():
+            return (cached.get('_schema_version') == settings.REPORT_ADVICE_VERSION
+                    and (cached.get('_mode') != 'fallback' or '_action_sources' in cached)
+                    and all(cached.get(k) for k in ('overall', 'literacy', 'institution', 'behavior', 'asset', 'technology')))
+        return cached.get('_schema_version') not in final_advice.VERSIONS
     
     def __init__(self, initialize_llm: bool = True):
         self.llm_service = LLMService() if initialize_llm else None
@@ -25,6 +37,11 @@ class ReportAIService:
         :return: 包含所有建议的字典
         """
         logger.info("开始生成AI评估建议")
+        if final_advice.enabled():
+            result, mode, sources = final_advice.generate(report_data, self.llm_service)
+            return {**result, '_schema_version': settings.REPORT_ADVICE_VERSION, '_mode': mode, '_action_sources': sources}
+
+        # 原版（legacy）入口：以下六组原始提示语及其本地兜底函数原样保留。
         
         suggestions = {}
         
@@ -287,6 +304,8 @@ class ReportAIService:
     def normalize_cached_suggestions(self, report_data: Dict[str, Any], cached: Dict[str, Any]) -> Dict[str, Any]:
         """升级旧版建议缓存，修复已知的通用兜底文案和标点问题。"""
         result = dict(cached or {})
+        if final_advice.enabled() or result.get('_schema_version') in final_advice.VERSIONS:
+            return result if self.can_reuse(result) else self.generate_all_suggestions(report_data)
         if result.get('_schema_version') == self.SUGGESTION_SCHEMA_VERSION:
             return result
 
@@ -350,6 +369,9 @@ class ReportAIService:
     def regenerate_fallback_suggestions(self, report_data: Dict[str, Any], cached: Dict[str, Any]) -> Dict[str, Any]:
         """仅重新生成已识别为兜底文案的建议，正常的大模型缓存保持不变。"""
         result = dict(cached or {})
+        if final_advice.enabled():
+            # 定稿缓存已由 normalize_cached_suggestions 检查版本，勿按旧文案特征重复生成。
+            return result
         dimensions = report_data.get('dimension_scores', {}) or {}
         observations = report_data.get('observation_scores', {}) or {}
         total_score = float(report_data.get('total_score') or 0)

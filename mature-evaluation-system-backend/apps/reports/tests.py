@@ -2,12 +2,12 @@ from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User
-from apps.assessments.models import Assessment, InstitutionAssessment
+from apps.assessments.models import Assessment, AssetAssessment, InstitutionAssessment
 from apps.assessments.scoring_service import ScoringService
 from apps.regions.models import Region, RegionReportSuggestionCache
 from apps.regions.region_report_ai_service import RegionReportAIService
@@ -138,6 +138,42 @@ class ReportStatisticsTests(TestCase):
         single = region_statistics(region_for_school(self.national))
         self.assertEqual(single['dimension_statistics'][0]['std_dev'], 0)
 
+    def test_literacy_radar_uses_latest_regional_school_observation_means(self):
+        for assessment, teacher, student in [
+            (self.target, 0, 1), (self.peer_latest, 4, 3),
+            (self.junior_report, None, 5), (self.old_peer, 5, 5),
+            (self.national_report, 5, 0),
+        ]:
+            assessment.score_details['observation_scores'] = {
+                **{f'A1{i}': teacher for i in range(1, 6)},
+                **{f'A3{i}': student for i in range(1, 6)},
+            }
+            assessment.save(update_fields=['score_details'])
+        # Out-of-range values and missing observations must not become zero.
+        self.peer_latest.score_details['observation_scores']['A12'] = 6
+        self.peer_latest.score_details['observation_scores'].pop('A15')
+        self.peer_latest.save(update_fields=['score_details'])
+        self.target.score_details['observation_scores'].pop('A15')
+        self.target.save(update_fields=['score_details'])
+        with patch.object(ScoringService, 'calculate_all_scores', side_effect=AssertionError('Must use snapshots')):
+            report = region_statistics(region_for_school(self.school))
+        teacher, student = report['dimension_statistics'][0]['secondary_indicators']
+        points = teacher['observation_indicators']
+        self.assertEqual([point['key'] for point in points], [f'A1{i}' for i in range(1, 6)])
+        self.assertEqual(points[0]['average'], 2)
+        self.assertEqual(points[0]['count'], 2)
+        self.assertEqual(points[1]['average'], 0)
+        self.assertEqual(points[1]['count'], 1)
+        self.assertIsNone(points[4]['average'])
+        self.assertTrue(all(point['average'] == 3 for point in student['observation_indicators']))
+        self.assertEqual([point['key'] for point in student['observation_indicators']], [f'A3{i}' for i in range(1, 6)])
+
+    def test_empty_region_radar_preserves_axes_without_fabricating_scores(self):
+        report = region_statistics({'province': '无', 'city': '无', 'name': '无'})
+        for child in report['dimension_statistics'][0]['secondary_indicators']:
+            self.assertEqual(len(child['observation_indicators']), 5)
+            self.assertTrue(all(point['average'] is None for point in child['observation_indicators']))
+
     def test_legacy_document_quality_is_missing_without_llm_or_database_writes(self):
         InstitutionAssessment.objects.create(assessment=self.target, management_doc_status='clear_required',
             management_doc_count=1, management_doc_files=[{'path': 'never-read.pdf'}], management_doc_analysis='旧分析')
@@ -150,6 +186,87 @@ class ReportStatisticsTests(TestCase):
         self.assertEqual(self.target.score_details, {})
         self.assertEqual(self.target.total_score, Decimal('3'))
         self.assertEqual(self.target.institution.management_doc_analysis, '旧分析')
+
+    def test_regional_institution_charts_average_each_observation_independently(self):
+        for record, points in [
+            (self.target, {'B11': 5, 'B12': 3, 'B21': 0, 'B22': 1, 'B32': 0}),
+            (self.peer_latest, {'B11': 3, 'B12': 1, 'B22': 3, 'B31': 9}),
+            (self.old_peer, {'B11': 1, 'B31': 5}),
+            (self.national_report, {'B11': 1, 'B31': 5}),
+        ]:
+            record.score_details['observation_scores'] = points
+            record.save(update_fields=['score_details'])
+        report = region_statistics(region_for_school(self.school))
+        institution = next(row for row in report['dimension_statistics'] if row['key'] == 'institution')
+        groups = {group['key']: [(p['key'], p['average']) for p in group['observation_indicators']]
+                  for group in institution['secondary_indicators']}
+        self.assertEqual(groups, {'B1': [('B11', 4), ('B12', 2)], 'B2': [('B21', 0), ('B22', 2)],
+                                  'B3': [('B31', None), ('B32', 0)]})
+
+    def test_regional_behavior_charts_use_observation_means_and_teacher_evaluation(self):
+        for record, value in [(self.target, 0), (self.peer_latest, 4),
+                              (self.old_peer, 5), (self.national_report, 5)]:
+            record.score_details['observation_scores'] = {
+                code: value for code in ('C11', 'C12', 'C21', 'C22', 'C23')
+            }
+            record.save(update_fields=['score_details'])
+        self.peer_latest.score_details['observation_scores']['C23'] = 3
+        self.peer_latest.save(update_fields=['score_details'])
+        report = region_statistics(region_for_school(self.school))
+        behavior = next(row for row in report['dimension_statistics'] if row['key'] == 'behavior')
+        monitor, effect = behavior['secondary_indicators']
+        self.assertEqual([point['key'] for point in monitor['observation_indicators']], ['C11', 'C12'])
+        self.assertTrue(all(point['average'] == 2 for point in monitor['observation_indicators']))
+        self.assertEqual([point['key'] for point in effect['observation_indicators']], ['C21', 'C22', 'C23'])
+        self.assertEqual(effect['observation_indicators'][2]['average'], 1.5)
+        self.assertEqual(effect['observation_indicators'][2]['count'], 2)
+
+    def test_asset_charts_and_volumes_share_latest_regional_cohort(self):
+        for record, volume, points in [
+            (self.target, 100, 0), (self.peer_latest, 300, 4),
+            (self.old_peer, 9999, 5), (self.national_report, 9999, 5),
+        ]:
+            AssetAssessment.objects.create(
+                assessment=record, has_unified_data_management=True, can_query_data_assets=True,
+                teaching_data_stat_method='system_query', teaching_data_volume=volume,
+                campus_admin_data_stat_method='unable', campus_admin_data_volume=9999,
+            )
+            record.score_details['observation_scores'] = {
+                code: points for code in ('D11', 'D12', 'D13', 'D21', 'D22')
+            }
+            record.save(update_fields=['score_details'])
+        School.objects.filter(pk=self.school.pk).update(teacher_count=1, student_count=9)
+        School.objects.filter(pk=self.peer.pk).update(teacher_count=10, student_count=80)
+        report = region_statistics(region_for_school(self.school))
+        asset = next(row for row in report['dimension_statistics'] if row['key'] == 'asset')
+        self.assertEqual([p['key'] for child in asset['secondary_indicators']
+                          for p in child['observation_indicators']], ['D11', 'D12', 'D13', 'D21', 'D22'])
+        self.assertTrue(all(p['average'] == 2 for child in asset['secondary_indicators']
+                            for p in child['observation_indicators']))
+        self.assertEqual(asset['volume_summary'], {
+            'total_gb': 400, 'per_capita_gb': 4, 'school_count': 2, 'missing_population_count': 0,
+        })
+        School.objects.filter(pk=self.peer.pk).update(student_count=None)
+        report = region_statistics(region_for_school(self.school))
+        asset = next(row for row in report['dimension_statistics'] if row['key'] == 'asset')
+        self.assertIsNone(asset['volume_summary']['per_capita_gb'])
+        self.assertEqual(asset['volume_summary']['total_gb'], 400)
+
+    def test_asset_volume_distinguishes_unavailable_and_real_zero(self):
+        def summary():
+            report = region_statistics(region_for_school(self.school))
+            return next(row for row in report['dimension_statistics'] if row['key'] == 'asset')['volume_summary']
+        self.assertIsNone(summary()['total_gb'])
+        asset = AssetAssessment.objects.create(
+            assessment=self.target, has_unified_data_management=True, can_query_data_assets=False,
+            teaching_data_stat_method='system_query', teaching_data_volume=0,
+        )
+        School.objects.filter(pk=self.school.pk).update(teacher_count=1, student_count=9)
+        self.assertIsNone(summary()['total_gb'])
+        asset.can_query_data_assets = True
+        asset.save(update_fields=['can_query_data_assets'])
+        self.assertEqual(summary()['total_gb'], 0)
+        self.assertEqual(summary()['per_capita_gb'], 0)
 
     def test_new_scoring_captures_secondary_snapshot(self):
         fresh = self.assessment(self.school, None, status='draft')
@@ -194,6 +311,7 @@ class ReportStatisticsTests(TestCase):
             self.assertEqual(generate.call_count, 2)
         self.assertEqual(RegionReportSuggestionCache.objects.count(), 1)
 
+    @override_settings(REPORT_ADVICE_VERSION='legacy')
     def test_fallback_suggestions_include_actual_statistics(self):
         from .statistics import region_ai_payload
         payload = region_ai_payload(region_statistics(region_for_school(self.school)))

@@ -54,7 +54,7 @@ class ReportService:
 
             # 第三步：生成AI建议
             logger.info("步骤3: 生成AI建议")
-            if self.assessment.ai_suggestions:
+            if self.ai_service.can_reuse(self.assessment.ai_suggestions):
                 logger.info("使用已缓存的AI建议")
                 suggestions = self.assessment.ai_suggestions
             else:

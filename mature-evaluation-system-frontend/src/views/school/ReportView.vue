@@ -120,7 +120,7 @@
         <!-- AI评估建议 -->
         <p class="ranking-scope-note">{{ reportData.rankings?.scope_note }} <span v-if="reportData.rankings?.unavailable_reason">{{ reportData.rankings.unavailable_reason }}</span></p>
         <div class="ai-suggestion">
-          <p style="text-indent: 2em;"><strong>评估建议：</strong>{{ reportData.suggestions?.overall || '暂无建议' }}</p>
+          <p><strong>评估建议：</strong>{{ reportData.suggestions?.overall || '暂无建议' }}</p>
         </div>
 
         <div class="evaluation-note">
@@ -185,7 +185,7 @@
 
         <!-- AI评估建议 -->
         <div class="ai-suggestion">
-          <p style="text-indent: 2em;"><strong>评估建议：</strong>{{ reportData.suggestions?.literacy || '暂无建议' }}</p>
+          <p><strong>评估建议：</strong>{{ reportData.suggestions?.literacy || '暂无建议' }}</p>
         </div>
 
         <div class="scoring-rules">
@@ -329,7 +329,7 @@
 
         <!-- AI评估建议 -->
         <div class="ai-suggestion">
-          <p style="text-indent: 2em;"><strong>评估建议：</strong>{{ reportData.suggestions?.institution || '暂无建议' }}</p>
+          <p><strong>评估建议：</strong>{{ reportData.suggestions?.institution || '暂无建议' }}</p>
         </div>
 
         <div class="scoring-rules">
@@ -487,7 +487,7 @@
 
         <!-- AI评估建议 -->
         <div class="ai-suggestion">
-          <p style="text-indent: 2em;"><strong>评估建议：</strong>{{ reportData.suggestions?.behavior || '暂无建议' }}</p>
+          <p><strong>评估建议：</strong>{{ reportData.suggestions?.behavior || '暂无建议' }}</p>
         </div>
 
         <div class="scoring-rules">
@@ -667,7 +667,7 @@
 
         <!-- AI评估建议 -->
         <div class="ai-suggestion">
-          <p style="text-indent: 2em;"><strong>评估建议：</strong>{{ reportData.suggestions?.asset || '暂无建议' }}</p>
+          <p><strong>评估建议：</strong>{{ reportData.suggestions?.asset || '暂无建议' }}</p>
         </div>
 
         <!-- 计分规则说明 -->
@@ -789,7 +789,7 @@
 
         <!-- AI评估建议 -->
         <div class="ai-suggestion">
-          <p style="text-indent: 2em;"><strong>评估建议：</strong>{{ reportData.suggestions?.technology || '暂无建议' }}</p>
+          <p><strong>评估建议：</strong>{{ reportData.suggestions?.technology || '暂无建议' }}</p>
         </div>
 
         <!-- 计分规则说明 -->
@@ -2225,6 +2225,7 @@ const getTeacherRatioText = () => {
   margin: 0;
   color: #606266;
   line-height: 1.8;
+  white-space: pre-line;
 }
 
 .evaluation-note {

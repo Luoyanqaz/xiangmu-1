@@ -74,7 +74,7 @@ class ReportDataService:
             'report_date': self.assessment.completed_at or self.assessment.updated_at,
             
             # 总体得分（5分制和百分制都提供）
-            'total_score': float(self.assessment.total_score or 0),  # 5分制
+            'total_score': float(self.assessment.total_score) if self.assessment.total_score is not None else None,
             'total_score_percent': float(self.assessment.total_score or 0) * 20,  # 百分制
             'maturity_level': self.get_maturity_level_display(),
             

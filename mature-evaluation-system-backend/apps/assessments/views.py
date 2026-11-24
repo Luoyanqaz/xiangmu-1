@@ -141,9 +141,10 @@ class AssessmentViewSet(viewsets.ModelViewSet):
         from apps.reports.report_ai_service import ReportAIService
         suggestion_service = ReportAIService()
         suggestion_report_data = {
-            'total_score': to_float(assessment.total_score),
+            'total_score': to_float(assessment.total_score, None),
             'maturity_level': assessment.get_maturity_level_display(),
-            'dimension_scores': dimension_scores,
+            'dimension_scores': {key: to_float(getattr(assessment, key + '_score'), None)
+                                 for key in dimension_scores},
             'secondary_scores': secondary_scores,
             'observation_scores': observation_scores,
         }
