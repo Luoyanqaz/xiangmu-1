@@ -9,7 +9,7 @@ from django.conf import settings
 from apps.assessments.maturity import MATURITY_LABELS, determine_maturity_level
 from .statistics import DIMENSIONS, REGIONAL_OBSERVATIONS, valid_score
 
-VERSIONS = ('20261120', '20261124')
+VERSIONS = ('20261120', '20261124', '20261126', '20261127')
 SOURCE = Path(__file__).parent / 'prompts'
 logger = logging.getLogger(__name__)
 BANDS = {'leading': '非常优秀', 'mature': '较为优秀', 'growing': '比较良好', 'initial': '有待提升'}
@@ -73,7 +73,7 @@ def targets(rows, overall):
     return [row for row in low if row[2] == low[0][2]]
 
 
-def describe_nov24(rows):
+def describe_nov24(rows, *, mark_uniform_low=False):
     high, low = [], []
     for grade, band in BANDS.items():
         names = [name for _, name, score in rows if determine_maturity_level(score) == grade]
@@ -84,12 +84,14 @@ def describe_nov24(rows):
     if high and low:
         parts = high + ['但' + '，'.join(low) + '，仍有改进空间']
     missing = [name for _, name, score in rows if score is None]
+    if mark_uniform_low and not missing and not high and len(low) == 1:
+        parts[-1] += '，仍有改进空间'
     if missing:
         parts.append('、'.join(missing) + '暂无有效得分')
     return '，'.join(parts) + '。'
 
 
-def summary_nov24(total, overall, region):
+def summary_nov24(total, overall, region, *, version):
     subject = '该区域' if region else '该校'
     grade = determine_maturity_level(total)
     if grade:
@@ -99,10 +101,18 @@ def summary_nov24(total, overall, region):
         intro = f'{subject}数据文化得分为{total:.2f}分，成熟度等级为{MATURITY_LABELS[grade]}。{actor}{STAGES[grade]}。'
     else:
         intro = f'{subject}暂无有效数据文化总分。'
-    summary = intro + '其中，' + describe_nov24(overall)
-    low = sorted((row for row in overall if row[2] is not None and row[2] < 3), key=lambda row: row[2])
+    limit_to_three = version in ('20261126', '20261127')
+    summary = intro + '其中，' + describe_nov24(overall, mark_uniform_low=limit_to_three)
+    low = [row for row in overall if row[2] is not None and row[2] < 3]
+    # 26 日按指标顺序选取；27 日优先最低分，同分沿用指标顺序。
+    if version != '20261126':
+        low.sort(key=lambda row: row[2])
+    if limit_to_three:
+        low = low[:3]
     if low:
         names = '、'.join(name for _, name, _ in low)
+        if version == '20261127' or (region and version == '20261126'):
+            names += '等方面'
         if region:
             return summary + f'当前短板主要集中在{names}，区域教育管理部门可依托实践基础较好的学校，围绕薄弱维度开展分类指导、组织跨校研修，推动高水平学校发挥示范作用。'
         return summary + f'建议优先围绕{names}制定专项改进计划，并按学期跟踪关键指标变化，为持续改进提供依据。'
@@ -159,9 +169,21 @@ def read_actions(response):
     return obj if isinstance(obj, dict) else {}
 
 
+def join_actor_actions(selected, actors, actions):
+    grouped = {}
+    for code, _, _ in selected:
+        grouped.setdefault(actors[code], []).append(actions[code])
+    clauses = []
+    for actor, steps in grouped.items():
+        phrase = '，'.join(steps[:-1]) + '，并' + steps[-1] if len(steps) > 1 else steps[0]
+        clauses.append(f'由{actor}{phrase}')
+    return '；'.join(clauses)
+
+
 def generate(data, llm, *, region=False):
     version = settings.REPORT_ADVICE_VERSION
-    revised = version == '20261124'
+    actor_actions = version in ('20261126', '20261127')
+    revised = version == '20261124' or actor_actions
     scope = 'region' if region else 'school'
     subject = '该区域' if region else '该校'
     total, dims, secondary, obs = inputs(data, region)
@@ -173,6 +195,8 @@ def generate(data, llm, *, region=False):
             points = REGIONAL_OBSERVATIONS[child]
             pairs = [(code, cfg['name'].removeprefix('教师').removeprefix('学生')
                       if key in ('literacy', 'asset') else cfg['name']) for code, cfg in points.items()]
+            if actor_actions and child == 'C2':
+                pairs = [(code, '应用效果主观评价' if code == 'C23' else label) for code, label in pairs]
             groups[child] = classify(pairs, obs)
             owners.update(dict.fromkeys(points, key))
     if revised:
@@ -182,10 +206,15 @@ def generate(data, llm, *, region=False):
     else:
         selections = {key: targets(rows, key == 'overall') for key, rows in groups.items()}
     actions = {}
+    actors = {}
     for selected in selections.values():
         for code, _, _ in selected:
-            actions[code] = ('区域教育管理部门可指导参评学校' if region else
-                             f'由{SCHOOL_ACTORS[owners[code]]}') + ACTIONS[code]
+            if actor_actions:
+                actors[code] = '区域教育管理部门' if region else SCHOOL_ACTORS[owners[code]]
+                actions[code] = ('指导参评学校' if region else '') + ACTIONS[code]
+            else:
+                actions[code] = ('区域教育管理部门可指导参评学校' if region else
+                                 f'由{SCHOOL_ACTORS[owners[code]]}') + ACTIONS[code]
     sources = dict.fromkeys(actions, 'fallback')
     if actions and llm and settings.LLM_ALLOW_NETWORK:
         brief = {key: [{'编号': code, '名称': name} for code, name, _ in selected]
@@ -194,22 +223,44 @@ def generate(data, llm, *, region=False):
             '对象': '区域' if region else '学校', '总分': total, '一级维度': dims, '二级指标': secondary,
             '观测点': obs, '本次选中的改进项': brief,
         }, ensure_ascii=False, default=str)
-        prompt += ('\n程序负责按上述定稿拼接所有得分、表现、分段和专项计划。'
+        if actor_actions:
+            role = '区域教育管理部门或区域内的教研、技术支持机构' if region else '该校的校内部门或岗位'
+            if version == '20261127':
+                role += '，如区域教师发展中心、教育行政部门' if region else '，如教务处、学科教研组、年级组'
+            prompt += (f'\n本次报告的实施主体须为{role}。程序负责得分、判档、总评和段落衔接。'
+                       '仅为选中的每个观测点编号返回一行 JSON，例如 '
+                       '{"E21":{"actor":"实施主体名称","action":"核验平台认证材料并登记整改事项"}}。'
+                       'actor 仅填名称，不加“由”，同一主体使用一致的名称。action 从动词起笔，'
+                       '结合对应观测点写具体场景中的措施，不重复主体、分值、表现或预期效果。'
+                       '同一维度的正文约250字，措施用简明短句。')
+        else:
+            prompt += ('\n程序负责按上述定稿拼接所有得分、表现、分段和专项计划。'
                    '为每个选中的编号单独输出一行JSON，每行只有一对键值，例如 {"E21":"由信息中心核验认证材料"}。'
                    '只输出本次选中的编号，键必须逐字使用编号，'
                    '值为一句不超过50字的措施，不复述得分、档次和指标名称，不加“建议”前缀。'
                    + ('每条写明区域部门能采取的行动。' if region else '每条写明校内实施主体和可执行行动。'))
-        if revised:
+        if version == '20261124':
             prompt += '请用连贯自然的短句写明由谁在什么场景落实措施，同一维度的完整分析以约250字为宜。'
         try:
             parsed = read_actions(llm._call_api(prompt, max_tokens=max(2200, len(actions) * 110)))
             for code in actions:
                 value = parsed.get(code)
+                if actor_actions:
+                    if not isinstance(value, dict) or not isinstance(value.get('actor'), str):
+                        continue
+                    actor = value['actor'].strip().removeprefix('由').strip()
+                    if not actor or len(actor) > 30 or re.search(r'[\r\n。，；]', actor):
+                        continue
+                    value = value.get('action')
                 if isinstance(value, str):
                     content = value.strip().rstrip('。').strip()
+                    if actor_actions and ('\n' in content or '\r' in content):
+                        continue
                     if content and len(value.strip()) <= 85 and not re.search(r'\d+(?:\.\d+)?\s*分', content):
                         actions[code] = content
                         sources[code] = 'ai'
+                        if actor_actions:
+                            actors[code] = actor
             failed = [code for code in sources if sources[code] == 'fallback']
             if failed:
                 logger.warning('定稿建议逐项采用本地文案，编号：%s', ', '.join(failed))
@@ -219,10 +270,12 @@ def generate(data, llm, *, region=False):
     mode = 'mixed' if len(modes) > 1 else next(iter(modes), 'rules')
 
     def measures(selected):
+        if actor_actions:
+            return join_actor_actions(selected, actors, actions)
         return '，'.join(actions[code] for code, _, _ in selected)
 
     if revised:
-        summary = summary_nov24(valid_score(total), overall, region)
+        summary = summary_nov24(valid_score(total), overall, region, version=version)
     else:
         grade = determine_maturity_level(total)
         intro = (f'{subject}数据文化得分为{float(total):.2f}分，成熟度等级为{MATURITY_LABELS[grade]}。'
@@ -249,5 +302,8 @@ def generate(data, llm, *, region=False):
             elif revised and all(score is not None and score >= 3 for _, _, score in points):
                 text += ('可继续组织校际交流，推广已有做法。' if region else '可在日常工作中延续已有做法。')
             paragraphs.append(text)
-        result[key] = '\n'.join(paragraphs)
+        if actor_actions:
+            result[key] = paragraphs[0] + '其中，' + ''.join(paragraphs[1:])
+        else:
+            result[key] = '\n'.join(paragraphs)
     return result, mode, sources

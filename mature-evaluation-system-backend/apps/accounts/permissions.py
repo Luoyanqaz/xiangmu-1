@@ -1,6 +1,13 @@
 from rest_framework.permissions import BasePermission
 
 
+class IsPlatformAdmin(BasePermission):
+    message = '仅平台管理员可访问'
+
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.is_admin_user()
+
+
 class IsRegionAdmin(BasePermission):
     message = "仅区域管理员可访问"
 

@@ -263,6 +263,7 @@ const generateQr = async (url, title) => {
 }
 
 const isAssessmentExpired = (assessmentData) => {
+  if (assessmentData?.check_survey_quality) return false
   if (!assessmentData?.created_at) return false
 
   const startTime = new Date(assessmentData.created_at).getTime()

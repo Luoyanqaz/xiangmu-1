@@ -155,7 +155,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Loading, CircleCheck } from '@element-plus/icons-vue'
@@ -173,6 +173,8 @@ const formRules = reactive({})
 const submitting = ref(false)
 const submitted = ref(false)
 const successDialogVisible = ref(false)
+let attempt
+const storageKey = computed(() => 'survey-attempt:' + uuid.value)
 
 // 加载问卷
 const loadSurvey = async () => {
@@ -211,6 +213,15 @@ const loadSurvey = async () => {
   } finally {
     loading.value = false
   }
+  if (survey.value?.attempt) {
+    await nextTick()
+    const questions = JSON.stringify(survey.value.questions)
+    let saved
+    try { saved = JSON.parse(sessionStorage.getItem(storageKey.value)) } catch { /* Storage may be unavailable. */ }
+    attempt = saved?.questions === questions && saved.token && Number.isFinite(saved.start)
+      ? saved : { token: survey.value.attempt, start: Date.now(), questions }
+    try { sessionStorage.setItem(storageKey.value, JSON.stringify(attempt)) } catch { /* Keep timing in memory. */ }
+  }
 }
 
 // 格式化描述文本
@@ -229,7 +240,9 @@ const handleSubmit = async () => {
     submitting.value = true
     
     // 提交答案
-    await submitSurvey(uuid.value, formData)
+    const timing = attempt ? { attempt: attempt.token, elapsed_ms: Math.max(0, Date.now() - attempt.start) } : {}
+    await submitSurvey(uuid.value, formData, timing)
+    try { sessionStorage.removeItem(storageKey.value) } catch { /* Storage may be unavailable. */ }
     
     submitted.value = true 
     // 显示成功对话框

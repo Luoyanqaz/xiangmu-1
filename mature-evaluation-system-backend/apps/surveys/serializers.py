@@ -27,13 +27,18 @@ class SurveyInstanceSerializer(serializers.ModelSerializer):
     template_info = SurveyTemplateSerializer(source='template', read_only=True)
     share_url = serializers.SerializerMethodField()
     completion_rate = serializers.SerializerMethodField()
+    valid_count = serializers.SerializerMethodField()
+    check_survey_quality = serializers.BooleanField(source='assessment.check_survey_quality', read_only=True)
+
+    def get_valid_count(self, obj):
+        return obj.responses.filter(is_valid=True).count() if obj.assessment.check_survey_quality else None
     
     class Meta:
         model = SurveyInstance
         fields = [
             'id', 'assessment', 'template', 'template_info', 'uuid', 
             'target_count', 'collected_count', 'is_active', 
-            'created_at', 'expired_at', 'share_url', 'completion_rate'
+            'created_at', 'expired_at', 'share_url', 'completion_rate', 'valid_count', 'check_survey_quality'
         ]
         read_only_fields = ['uuid', 'collected_count']
     
@@ -66,6 +71,8 @@ class SurveyResponseSerializer(serializers.ModelSerializer):
 class SurveySubmitSerializer(serializers.Serializer):
     """问卷提交序列化器（用于公开接口）"""
     answers = serializers.JSONField()
+    attempt = serializers.CharField(required=False)
+    elapsed_ms = serializers.IntegerField(required=False, min_value=0)
     
     def validate_answers(self, value):
         """验证答案格式"""

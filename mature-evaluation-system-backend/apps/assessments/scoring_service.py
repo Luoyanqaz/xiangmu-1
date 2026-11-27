@@ -27,6 +27,7 @@ from typing import Dict, List
 import logging
 from . import scoring_config as config
 from .maturity import determine_maturity_level
+from apps.surveys.quality import scored_responses
 
 logger = logging.getLogger(__name__)
 
@@ -70,11 +71,11 @@ class ScoringService:
         logger.info(f"开始计算评估 {self.assessment.id} 的得分")
 
         # 计算各维度得分（5分制）
-        a_score = self.calculate_literacy_score()      # A 数据素养
-        b_score = self.calculate_institution_score()   # B 数据制度
-        c_score = self.calculate_behavior_score()      # C 数据行为
-        d_score = self.calculate_asset_score()         # D 数据资产
-        e_score = self.calculate_technology_score()    # E 数据技术
+        a_score = self.calculate_literacy_score()
+        b_score = self.calculate_institution_score()
+        c_score = self.calculate_behavior_score()
+        d_score = self.calculate_asset_score()
+        e_score = self.calculate_technology_score()
 
         # 存储一级维度得分
         self.dimension_scores = {
@@ -218,7 +219,7 @@ class ScoringService:
         
         responses = []
         for instance in instances:
-            responses.extend(SurveyResponse.objects.filter(instance=instance))
+            responses.extend(scored_responses(instance, self.assessment))
 
         if not responses:
             logger.warning(f"没有{survey_type}问卷回答数据")
@@ -554,7 +555,7 @@ class ScoringService:
 
         responses = []
         for inst in instances:
-            responses.extend(SurveyResponse.objects.filter(instance=inst))
+            responses.extend(scored_responses(inst, self.assessment))
 
         raw_score = self._calc_survey_raw_score(
             responses,
@@ -645,7 +646,7 @@ class ScoringService:
 
         teacher_responses = []
         for inst in teacher_instances:
-            teacher_responses.extend(SurveyResponse.objects.filter(instance=inst))
+            teacher_responses.extend(scored_responses(inst, self.assessment))
 
         # D11: 教师数据资产价值意识
         start, end = rules['D11']['survey_range']

@@ -57,17 +57,13 @@ def compute_module_status(assessment) -> Dict[str, bool]:
     # -------------------------
     # A) 数据素养：新版仅教师、学生问卷
     # -------------------------
-    teacher_response_count = SurveyResponse.objects.filter(
-        instance__assessment=assessment,
-        instance__template__survey_type="teacher"
-    ).count()
-
-    student_response_count = SurveyResponse.objects.filter(
-        instance__assessment=assessment,
-        instance__template__survey_type="student"
-    ).count()
-
-    literacy_ok = teacher_response_count > 0 and student_response_count > 0
+    if assessment.check_survey_quality:
+        roles = assessment.survey_instances.values_list('template__survey_type', flat=True)
+        literacy_ok = assessment.survey_snapshot is not None or {'teacher', 'student'}.issubset(roles)
+    else:
+        roles = SurveyResponse.objects.filter(instance__assessment=assessment).values_list(
+            'instance__template__survey_type', flat=True)
+        literacy_ok = {'teacher', 'student'}.issubset(roles)
 
     # -------------------------
     # B) 数据制度

@@ -70,6 +70,35 @@ class ReportStatisticsTests(TestCase):
         self.assertFalse(ranks['available'])
         self.assertIsNone(ranks['total']['region']['rank'])
 
+    def test_regional_collection_uses_only_latest_completed_round_per_school(self):
+        from apps.surveys.models import SurveyInstance, SurveyResponse, SurveyTemplate
+        for assessment, received in [(self.old_peer, 99), (self.peer_latest, 3)]:
+            assessment.survey_snapshot = {'teacher': {'received': received, 'valid': 1},
+                                          'student': {'received': 2, 'valid': 0}}
+            assessment.save(update_fields=['survey_snapshot'])
+        template = SurveyTemplate.objects.create(survey_type='teacher', title='旧版教师问卷')
+        self.target.check_survey_quality = False
+        self.target.save(update_fields=['check_survey_quality'])
+        instance = SurveyInstance.objects.create(assessment=self.target, template=template)
+        SurveyResponse.objects.create(instance=instance, answers={})
+        self.junior_report.check_survey_quality = False
+        self.junior_report.save(update_fields=['check_survey_quality'])
+        client = APIClient()
+        path = '/api/admin/region-report/survey-collection/'
+        params = {'region_id': self.region.id}
+        self.assertEqual(client.get(path, params).status_code, 401)
+        for user in (self.region_user, self.school.user):
+            client.force_authenticate(user)
+            self.assertEqual(client.get(path, params).status_code, 403)
+        client.force_authenticate(self.admin)
+        self.assertEqual(client.get(path).status_code, 400)
+        response = client.get(path, params)
+        self.assertEqual(response.status_code, 200)
+        counts = response.data['data']
+        self.assertEqual(counts['teacher'], {'received': 4, 'valid': 1, 'invalid': 2, 'unjudged': 1})
+        self.assertEqual(counts['student'], {'received': 2, 'valid': 0, 'invalid': 2, 'unjudged': 0})
+        self.assertEqual(counts['shortages'], {'teacher': 0, 'student': 1, 'both': 0})
+
     def test_equal_completion_timestamp_uses_highest_id(self):
         newer = self.assessment(self.school, 2)
         Assessment.objects.filter(pk=newer.pk).update(completed_at=self.target.completed_at)
@@ -287,11 +316,13 @@ class ReportStatisticsTests(TestCase):
         response = client.get(path, {'region_id': self.other_region.id})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['data']['region']['id'], self.region.id)
+        self.assertNotIn('survey_collection', response.data['data']['summary'])
         client.force_authenticate(self.admin)
         self.assertEqual(client.get('/api/admin/region-report/statistics/').status_code, 400)
         response = client.get('/api/admin/region-report/statistics/', {'region_id': self.other_region.id})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['data']['summary']['completed_school_count'], 1)
+        self.assertNotIn('survey_collection', response.data['data']['summary'])
 
     def test_ai_uses_server_statistics_and_cache_includes_secondary_scores(self):
         client = APIClient()

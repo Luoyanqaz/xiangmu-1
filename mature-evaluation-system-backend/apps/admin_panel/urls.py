@@ -4,13 +4,14 @@ URL configuration for admin_panel app
 from django.urls import path
 from . import views
 from apps.regions.views import AdminRegionReportAISuggestionsView
-from apps.reports.statistics_views import RegionReportStatisticsView
+from apps.reports.statistics_views import RegionReportStatisticsView, RegionSurveyCollectionView
 from apps.reports.school_type_views import SchoolTypeReportOptionsView, SchoolTypeReportStatisticsView
 
 urlpatterns = [
     path('school-type-report/options/', SchoolTypeReportOptionsView.as_view(), name='school-type-report-options'),
     path('school-type-report/statistics/', SchoolTypeReportStatisticsView.as_view(), name='school-type-report-statistics'),
     path('region-report/statistics/', RegionReportStatisticsView.as_view(), name='admin-region-report-statistics'),
+    path('region-report/survey-collection/', RegionSurveyCollectionView.as_view(), name='admin-region-survey-collection'),
     # 申请管理
     path('applications/', views.get_application_list, name='admin_application_list'),
     

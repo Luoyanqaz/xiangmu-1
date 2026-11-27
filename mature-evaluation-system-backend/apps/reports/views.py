@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.http import FileResponse, Http404
 from apps.assessments.models import Assessment
+from apps.assessments.services.submission import submit_round
 from .tasks import generate_assessment_report
 from .report_data_service import ReportDataService
 
@@ -34,12 +35,9 @@ def generate_report(request, assessment_id):
         if not can_access_report(request.user, assessment):
             return Response({'error': '无权限生成此评估报告'}, status=status.HTTP_403_FORBIDDEN)
         
-        # 注意：不检查status状态，因为用户填写完数据后可能还没有提交
-        # 报告生成时会自动计算得分并更新状态为completed
-        assessment.status = 'collecting'
-        assessment.save()
-        # 触发异步任务
-        task = generate_assessment_report.delay(assessment_id)
+        task = submit_round(assessment, generate_assessment_report)
+        if task is None:
+            return Response({'error': '本轮评估已经提交'}, status=400)
         
         logger.info(f"报告生成任务已触发，任务ID: {task.id}")
         
@@ -81,6 +79,8 @@ def get_report_data(request, assessment_id):
         # 如果还没有计算得分，先计算得分
         scoring_service = None
         if assessment.total_score is None:
+            if assessment.check_survey_quality and assessment.survey_snapshot is None:
+                return Response({'error': '请先提交本轮评估'}, status=400)
             from apps.assessments.scoring_service import ScoringService
             from django.utils import timezone
             

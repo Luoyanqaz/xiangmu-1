@@ -370,7 +370,6 @@
   :development-summary="aiSuggestions.development?.summary || ''"
   :suggestions="aiSuggestions.dimension_suggestions || {}"
   :loading="aiLoading"
-  :mode="aiSuggestions.suggestion_mode"
   :note="reportStatistics.statistics_note"
   :secondary-note="reportStatistics.secondary_note"
   :legacy-count="reportStatistics.legacy_assessment_count || 0"
@@ -658,7 +657,7 @@ async function loadAssessments() {
   region.value = data.region || null;
   summary.value = data.summary || {}
   reportStatistics.value = data
-  aiSuggestions.value = { level_suggestions: {}, development: { summary: "", conclusion: "" }, dimension_suggestions: {}, suggestion_mode: "" };
+  aiSuggestions.value = { level_suggestions: {}, development: { summary: "", conclusion: "" }, dimension_suggestions: {} };
 
   if (data.region) {
     regionStore.setRegion(data.region);
@@ -680,7 +679,6 @@ async function loadAISuggestions() {
     const data = resp.data || {};
     aiSuggestions.value = {
       dimension_suggestions: data.dimension_suggestions || {},
-      suggestion_mode: data.suggestion_mode || "",
       level_suggestions: {
         initial: data.level_suggestions?.initial || "",
         growing: data.level_suggestions?.growing || "",

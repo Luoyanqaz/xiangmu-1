@@ -91,10 +91,10 @@ export function getSurveyByUUID(uuid) {
  * @param {string} uuid - 问卷UUID
  * @param {object} answers - 答案数据
  */
-export function submitSurvey(uuid, answers) {
+export function submitSurvey(uuid, answers, timing = {}) {
   return request({
     url: `/surveys/public/${uuid}/submit/`,
     method: 'post',
-    data: { answers }
+    data: { answers, ...timing }
   })
 }

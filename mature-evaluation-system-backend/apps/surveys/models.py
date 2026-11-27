@@ -111,6 +111,9 @@ class SurveyResponse(models.Model):
         verbose_name='问卷实例'
     )
     answers = models.JSONField('答案内容')
+    is_valid = models.BooleanField('有效性', null=True, default=None)
+    attempt_id = models.UUIDField('作答编号', null=True, unique=True, editable=False)
+    quality_details = models.JSONField('题数、用时及无效原因', default=dict, blank=True)
     ip_address = models.GenericIPAddressField('IP地址', null=True, blank=True)
     submitted_at = models.DateTimeField('提交时间', auto_now_add=True)
     

@@ -4,8 +4,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.permissions import IsPlatformAdmin
 from apps.regions.models import Region
-from .statistics import region_statistics
+from apps.surveys.quality import regional_collection
+from .statistics import latest_completed, region_statistics, schools_in_region
 
 
 def resolve_report_region(request, submitted_region=None):
@@ -51,3 +53,13 @@ class RegionReportStatisticsView(APIView):
     def get(self, request):
         scope = resolve_report_region(request)
         return Response({'success': True, 'data': region_statistics(scope)})
+
+
+class RegionSurveyCollectionView(APIView):
+    permission_classes = [IsAuthenticated, IsPlatformAdmin]
+
+    def get(self, request):
+        scope = resolve_report_region(request)
+        assessments = latest_completed().filter(school__in=schools_in_region(scope)).only(
+            'survey_snapshot', 'check_survey_quality')
+        return Response({'success': True, 'data': regional_collection(assessments)})

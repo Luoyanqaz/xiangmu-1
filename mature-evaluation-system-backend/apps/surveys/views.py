@@ -7,6 +7,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.shortcuts import get_object_or_404
 from django.db import transaction
+from django.core import signing
+from django.db.models import F
 from django.utils import timezone
 from datetime import timedelta
 
@@ -16,6 +18,7 @@ from .serializers import (
     SurveyResponseSerializer, SurveySubmitSerializer
 )
 from apps.assessments.models import Assessment
+from . import quality
 
 from django.conf import settings
 from .utils.qrcode_utils import generate_qrcode_and_save
@@ -104,7 +107,7 @@ class SurveyInstanceViewSet(viewsets.ModelViewSet):
         # 生成新的UUID
         import uuid
         instance.uuid = uuid.uuid4()
-        instance.save()
+        instance.save(update_fields=['uuid'])
         
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
@@ -128,6 +131,7 @@ class SurveyInstanceViewSet(viewsets.ModelViewSet):
         # 统计数据
         stats = {
             'total_responses': responses.count(),
+        'valid_count': responses.filter(is_valid=True).count() if instance.assessment.check_survey_quality else None,
             'target_count': instance.target_count,
             'completion_rate': round(responses.count() / instance.target_count * 100, 2) if instance.target_count > 0 else 0,
             'is_active': instance.is_active,
@@ -143,6 +147,8 @@ class SurveyInstanceViewSet(viewsets.ModelViewSet):
 def get_survey_by_uuid(request, uuid):
     """通过UUID获取问卷内容（公开接口）"""
     instance = get_object_or_404(SurveyInstance, uuid=uuid, is_active=True)
+    if instance.assessment.check_survey_quality and instance.assessment.status != 'draft':
+        return Response({'error': '本轮评估已提交，问卷已停止收集'}, status=403)
     
     # 检查是否过期
     if instance.expired_at and timezone.now() > instance.expired_at:
@@ -172,7 +178,16 @@ def get_survey_by_uuid(request, uuid):
         ]
     }
     
-    return Response(data)
+    if instance.assessment.check_survey_quality and template.survey_type in quality.ROLES:
+        data['questions'].append({
+            'id': quality.ATTENTION, 'order': quality.ATTENTION, 'is_required': True,
+            'question_type': 'single_choice', 'options': ['非常不符合', '不符合', '一般', '符合', '非常符合'],
+            'question_text': '为确认您已阅读题目，请在本题选择“不符合”。',
+        })
+        data['attempt'] = quality.issue_attempt(instance, data['questions'])
+    response = Response(data)
+    response['Cache-Control'] = 'no-store'
+    return response
 
 
 @api_view(['POST'])
@@ -180,20 +195,6 @@ def get_survey_by_uuid(request, uuid):
 def submit_survey(request, uuid):
     """提交问卷答案（公开接口）"""
     instance = get_object_or_404(SurveyInstance, uuid=uuid, is_active=True)
-    
-    # 检查评估状态，只有草稿状态才允许提交问卷
-    if instance.assessment.status != 'draft':
-        return Response(
-            {'error': '该评估已提交，无法继续提交问卷'},
-            status=status.HTTP_403_FORBIDDEN
-        )
-    
-    # 检查是否过期
-    if instance.expired_at and timezone.now() > instance.expired_at:
-        return Response(
-            {'error': '问卷已过期'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
     
     # 验证数据
     serializer = SurveySubmitSerializer(data=request.data)
@@ -211,15 +212,37 @@ def submit_survey(request, uuid):
     
     # 保存问卷回答
     with transaction.atomic():
+        assessment = Assessment.objects.select_for_update().get(pk=instance.assessment_id)
+        instance = get_object_or_404(SurveyInstance.objects.select_for_update(), pk=instance.pk, uuid=uuid, is_active=True)
+        fields = {}
+        if assessment.check_survey_quality and instance.template.survey_type in quality.ROLES:
+            try:
+                attempt = signing.loads(serializer.validated_data.get('attempt', ''), salt=quality.SALT)
+            except signing.BadSignature:
+                return Response({'error': '作答记录无效，请刷新问卷后重新填写'}, status=400)
+            if attempt['link'] != str(instance.uuid) or 'elapsed_ms' not in serializer.validated_data:
+                return Response({'error': '作答记录与问卷不匹配，请重新打开问卷'}, status=400)
+            previous = SurveyResponse.objects.filter(instance=instance, attempt_id=attempt['id']).first()
+            if previous:
+                return Response({'message': '提交成功', 'response_id': previous.pk})
+            if any(answers.get(key) in (None, '', []) for key in attempt['required']):
+                return Response({'error': '请先完成全部必答题'}, status=400)
+            details = quality.evaluate(attempt, answers, serializer.validated_data['elapsed_ms'])
+            valid = not details['reasons']
+            fields = {'is_valid': valid, 'quality_details': details, 'attempt_id': attempt['id']}
+            answers = {key: value for key, value in answers.items() if key != 'q' + quality.ATTENTION} if valid else {}
+        if assessment.status != 'draft':
+            return Response({'error': '该评估已提交，无法继续提交问卷'}, status=403)
+        if instance.expired_at and timezone.now() > instance.expired_at:
+            return Response({'error': '问卷已过期'}, status=400)
         response = SurveyResponse.objects.create(
             instance=instance,
             answers=answers,
-            ip_address=ip_address
+            ip_address=ip_address, **fields
         )
         
         # 更新已收集数量
-        instance.collected_count += 1
-        instance.save()
+        SurveyInstance.objects.filter(pk=instance.pk).update(collected_count=F('collected_count') + 1)
     
     return Response(
         {'message': '提交成功', 'response_id': response.id},

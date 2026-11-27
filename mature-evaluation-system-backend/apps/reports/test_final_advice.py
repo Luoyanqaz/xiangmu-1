@@ -134,3 +134,71 @@ class FinalAdviceTests(SimpleTestCase):
         region['dimension_statistics'][2]['average'] = 0
         result, _, _ = final_advice.generate(region, None, region=True)
         self.assertIn('当前短板主要集中在数据行为，区域教育管理部门可依托', result['overall'])
+
+    @override_settings(REPORT_ADVICE_VERSION='20261126')
+    def test_nov26_overall_priority_order_cap_and_uniform_low_band(self):
+        self.data['dimension_scores'].update(literacy=2.9, institution=2.8, behavior=2.7, asset=1.5, technology=1.6)
+        region = {'summary': {'avg_score': 2}, 'dimension_statistics': [
+            {'key': key, 'average': score, 'secondary_indicators': []}
+            for key, score in self.data['dimension_scores'].items()]}
+        school, _, _ = final_advice.generate(self.data, None)
+        regional, _, _ = final_advice.generate(region, None, region=True)
+        self.assertIn('均表现比较良好，仍有改进空间。', school['overall'])
+        self.assertIn('优先围绕数据素养、数据制度、数据行为制定', school['overall'])
+        self.assertIn('短板主要集中在数据素养、数据制度、数据行为等方面', regional['overall'])
+        self.assertNotIn('\n', regional['literacy'])
+        self.data['dimension_scores'].update(literacy=3, institution=None, behavior=4, asset=0, technology=5)
+        school, _, _ = final_advice.generate(self.data, None)
+        self.assertIn('但数据资产表现有待提升，仍有改进空间', school['overall'])
+        self.assertIn('数据制度暂无有效得分', school['overall'])
+        self.assertIn('优先围绕数据资产制定', school['overall'])
+
+    @override_settings(REPORT_ADVICE_VERSION='20261126', LLM_ALLOW_NETWORK=True)
+    def test_nov26_combines_actions_by_actor_and_keeps_individual_fallback(self):
+        self.data['observation_scores'].update(E11=2, E12=2, E21=1, E22=3)
+        llm = Mock()
+        llm._call_api.return_value = (
+            '{"E11":{"actor":"信息中心","action":"盘点教学终端"}}\n'
+            '{"E12":{"actor":"信息中心","action":"核对各平台接口"}}\n'
+            '{"E21":{"action":"缺少实施主体"}}')
+        school, mode, sources = final_advice.generate(self.data, llm)
+        self.assertEqual((mode, sources), ('mixed', {'E11': 'ai', 'E12': 'ai', 'E21': 'fallback'}))
+        self.assertIn('该校的校内部门或岗位', llm._call_api.call_args.args[0])
+        self.assertIn('其中，数据基础设施方面', school['technology'])
+        self.assertIn('由信息中心盘点教学终端，并核对各平台接口。', school['technology'])
+        self.assertIn('由信息中心核查等保', school['technology'])
+        self.assertTrue(all('\n' not in paragraph for paragraph in school.values()))
+
+        region = {'summary': {'avg_score': 3}, 'dimension_statistics': [
+            {'key': 'technology', 'average': 3, 'secondary_indicators': [
+                {'key': 'E2', 'average': 2, 'observation_indicators': [{'key': 'E21', 'average': 1}]}]}]}
+        regional, mode, _ = final_advice.generate(region, llm, region=True)
+        self.assertIn('区域内的教研、技术支持机构', llm._call_api.call_args.args[0])
+        self.assertEqual(mode, 'fallback')
+        self.assertIn('由区域教育管理部门指导参评学校核查等保', regional['technology'])
+
+    @override_settings(REPORT_ADVICE_VERSION='20261127', LLM_ALLOW_NETWORK=True)
+    def test_nov27_lowest_three_in_both_reports_and_individual_observation_actions(self):
+        self.data['dimension_scores'].update(literacy=2.9, institution=1.5, behavior=1.5, asset=0, technology=1.5)
+        self.data['observation_scores'].update(E11=2, E12=0, E21=1, E22=3)
+        regional = {'summary': {'avg_score': 2}, 'dimension_statistics': [
+            {'key': key, 'average': score, 'secondary_indicators': []}
+            for key, score in reversed(list(self.data['dimension_scores'].items()))]}
+        regional['dimension_statistics'][0]['secondary_indicators'] = [
+            {'key': 'E1', 'average': 1, 'observation_indicators': [
+                {'key': 'E11', 'average': 2}, {'key': 'E12', 'average': 0}]},
+            {'key': 'E2', 'average': 2, 'observation_indicators': [
+                {'key': 'E21', 'average': 1}, {'key': 'E22', 'average': 3}]}]
+        for region, data in ((False, self.data), (True, regional)):
+            with self.subTest(region=region):
+                model = Mock()
+                actor = '区域教师发展中心' if region else '教务处'
+                model._call_api.return_value = '{"E11":{"actor":"' + actor + '","action":"盘点教学终端"}}'
+                report, mode, sources = final_advice.generate(data, model, region=region)
+                self.assertIn('数据资产、数据制度、数据行为等方面', report['overall'])
+                self.assertEqual(sources, {'E11': 'ai', 'E12': 'fallback', 'E21': 'fallback'})
+                self.assertEqual(mode, 'mixed')
+                self.assertIn('由' + actor + '盘点教学终端', report['technology'])
+                prompt = model._call_api.call_args.args[0]
+                self.assertIn('按得分由低到高依次选取最多3个一级维度', prompt)
+                self.assertIn(actor, prompt)

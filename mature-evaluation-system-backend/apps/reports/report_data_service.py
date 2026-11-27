@@ -7,7 +7,8 @@ from decimal import Decimal
 from typing import Dict, List, Any
 from django.db.models import Avg, Count, Case, When, F, FloatField
 from apps.assessments.models import Assessment, InstitutionAssessment, BehaviorAssessment, AssetAssessment, TechnologyAssessment
-from apps.surveys.models import SurveyResponse, SurveyInstance
+from apps.surveys.models import SurveyInstance
+from apps.surveys.quality import scored_responses
 from apps.assessments import scoring_config as config
 from apps.assessments.scoring_service import ScoringService
 from apps.assessments.maturity import MATURITY_LABELS, determine_maturity_level
@@ -53,13 +54,9 @@ class ReportDataService:
         )
 
         # 格式化返回，并增加兜底值 3.0
-        return {
-            'literacy': round(float(aggs['l'] or 3.0), 2),
-            'institution': round(float(aggs['i'] or 3.0), 2),
-            'behavior': round(float(aggs['b'] or 3.0), 2),
-            'asset': round(float(aggs['a'] or 3.0), 2),
-            'technology': round(float(aggs['t'] or 3.0), 2),
-        }
+        return {name: round(float(aggs[key]), 2) if aggs[key] is not None else 3.0
+                for name, key in [('literacy', 'l'), ('institution', 'i'), ('behavior', 'b'),
+                                  ('asset', 'a'), ('technology', 't')]}
 
     def get_all_report_data(self) -> Dict[str, Any]:
         """
@@ -152,8 +149,11 @@ class ReportDataService:
         counts = {}
         for instance in instances:
             survey_type = instance.template.survey_type
-            count = SurveyResponse.objects.filter(instance=instance).count()
-            counts[survey_type] = count
+            count = scored_responses(instance, self.assessment).count()
+            counts[survey_type] = counts.get(survey_type, 0) + count
+        if self.assessment.survey_snapshot:
+            for role, count in self.assessment.survey_snapshot.items():
+                counts[role] = count['received'] if count['valid'] is None else count['valid']
         
         return {
             'teacher': counts.get('teacher', 0),

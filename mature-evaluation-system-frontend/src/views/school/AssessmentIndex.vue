@@ -185,6 +185,7 @@
                 <div class="stat-item">
                   <span class="stat-label">已收集：</span>
                   <el-tag type="success">{{ teacherInstance.collected_count }}</el-tag>
+                  <span v-if="teacherInstance.valid_count != null">有效 {{ teacherInstance.valid_count }} 份</span>
                 </div>
                 <div class="stat-item">
                   <span class="stat-label">截止日期：</span>
@@ -292,6 +293,7 @@
                 <div class="stat-item">
                   <span class="stat-label">已收集：</span>
                   <el-tag type="success">{{ studentInstance.collected_count }}</el-tag>
+                  <span v-if="studentInstance.valid_count != null">有效 {{ studentInstance.valid_count }} 份</span>
                 </div>
                 <div class="stat-item">
                   <span class="stat-label">截止日期：</span>
@@ -436,6 +438,7 @@ const route = useRoute()
 const schoolName = ref('')
 const activeModule = ref('literacy')
 const currentAssessmentId = ref(null)
+const checksSurveyQuality = ref(false)
 const loading = ref(true)
 const assessmentStatus = ref('draft')
 const assessmentTimes = ref({})
@@ -507,7 +510,7 @@ const isFilled = (v) => {
 
 // 判断是否所有模块都已完成
 const isAllModulesDone = computed(() => {
-  return moduleDone.literacy && 
+  return (checksSurveyQuality.value || moduleDone.literacy) &&
          moduleDone.institution && 
          moduleDone.behavior && 
          moduleDone.asset && 
@@ -523,7 +526,7 @@ const getIncompleteModules = () => {
     technology: '数据技术'
   };
   return Object.keys(moduleDone)
-    .filter(key => !moduleDone[key])
+    .filter(key => !moduleDone[key] && !(key === 'literacy' && checksSurveyQuality.value))
     .map(key => names[key]);
 };
 
@@ -1004,6 +1007,7 @@ const loadOrCreateAssessment = async () => {
 
     if (targetAssessment) {
       currentAssessmentId.value = targetAssessment.id
+      checksSurveyQuality.value = targetAssessment.check_survey_quality
       assessmentStatus.value = targetAssessment.status
       assessmentTimes.value = {
         collecting: targetAssessment.created_at,
@@ -1016,6 +1020,7 @@ const loadOrCreateAssessment = async () => {
     } else {
       const newAssessment = await createAssessment()
       currentAssessmentId.value = newAssessment.id
+      checksSurveyQuality.value = newAssessment.check_survey_quality
       assessmentStatus.value = 'draft'
       assessmentTimes.value = {
         collecting: newAssessment.created_at
@@ -1028,6 +1033,7 @@ const loadOrCreateAssessment = async () => {
       try {
         const newAssessment = await createAssessment()
         currentAssessmentId.value = newAssessment.id
+        checksSurveyQuality.value = newAssessment.check_survey_quality
         assessmentStatus.value = 'draft'
         assessmentTimes.value = {
           collecting: newAssessment.created_at
@@ -1229,7 +1235,7 @@ const handleSubmitAssessment = async () => {
   const studentReady = isSurveyReady(studentInstance.value);
 
   // 如果有任何一个问卷既没数据也没到期，则拦截
-  if (!teacherReady || !studentReady ) {
+  if (!checksSurveyQuality.value && (!teacherReady || !studentReady)) {
     let unreadyList = [];
     if (!teacherReady) unreadyList.push('教师问卷');
     if (!studentReady) unreadyList.push('学生问卷');
@@ -1254,8 +1260,16 @@ const handleSubmitAssessment = async () => {
 
   // --- 第四步：提交确认 ---
   try {
+    let message = '确认提交评估？提交后将无法修改已填写的内容，系统将启动大模型进行智能分析。'
+    if (checksSurveyQuality.value) {
+      const instances = await getAssessmentSurveys(currentAssessmentId.value)
+      const valid = role => instances.find(item => item.template_info.survey_type === role)?.valid_count || 0
+      const teacher = valid('teacher'), student = valid('student')
+      const reason = !teacher || !student ? '缺少有效答卷的群体，其问卷指标记 0 分，其他指标按实得分计入总分。' : ''
+      message = `目前教师有效 ${teacher} 份，学生有效 ${student} 份。${reason}提交后将停止收集并固定本轮统计，确认提交？`
+    }
     await ElMessageBox.confirm(
-      '确认提交评估？提交后将无法修改已填写的内容，系统将启动大模型进行智能分析。',
+      message,
       '确认提交',
       { confirmButtonText: '确认提交', cancelButtonText: '取消', type: 'warning' }
     )
@@ -1341,6 +1355,7 @@ const isModuleLocked = (key) => {
   if (index === 0) return false; // 第一个模块永远不锁定
   
   const prevKey = MODULE_ORDER[index - 1];
+  if (prevKey === 'literacy' && checksSurveyQuality.value) return false
   return !moduleDone[prevKey]; // 如果前一个模块没完成，则当前模块锁定
 };
 

@@ -317,6 +317,7 @@ const formData = ref({
 })
 
 const isAssessmentExpired = (assessmentData) => {
+  if (assessmentData?.check_survey_quality) return false
   const startTime = assessmentData?.started_at || assessmentData?.created_at
 
   if (!startTime) return false

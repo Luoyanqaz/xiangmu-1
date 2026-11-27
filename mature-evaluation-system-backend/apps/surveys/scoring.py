@@ -3,6 +3,7 @@
 """
 from decimal import Decimal
 from .models import SurveyInstance, SurveyResponse
+from .quality import scored_responses
 
 
 class SurveyScoring:
@@ -98,7 +99,7 @@ class SurveyScoring:
     @classmethod
     def calculate_instance_average_score(cls, instance):
         """计算问卷实例的平均得分（所有回答的平均值）"""
-        responses = instance.responses.all()
+        responses = scored_responses(instance, instance.assessment)
         
         if not responses.exists():
             return None

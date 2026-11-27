@@ -88,6 +88,7 @@
         </p>
 
         <!-- 总分和等级展示 -->
+        <SurveyCollection v-if="reportData.survey_collection?.teacher.valid !== null" :counts="reportData.survey_collection" />
         <div class="overview-scores">
           <div class="score-card total">
             <span class="label">学校数据文化得分:{{ reportData.total_score?.toFixed(2) }}</span>
@@ -843,6 +844,7 @@
 </template>
 
 <script setup>
+import SurveyCollection from '@/components/SurveyCollection.vue'
 import { ref, onMounted, computed, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getReportDataDetail  } from '@/api/assessment'
@@ -981,6 +983,7 @@ const loadReportData = async (assessmentId) => {
 
       // --- D. 二级指标得分 (增加可选链防止崩掉) ---
       secondary_scores: raw.secondary_scores || {},
+      survey_collection: raw.survey_collection,
       observation_scores: raw.observation_scores || {},
       participant_counts: raw.participant_counts || { teacher: 0, student: 0 },
 

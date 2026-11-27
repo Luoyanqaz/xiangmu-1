@@ -370,7 +370,6 @@
   :development-summary="aiSuggestions.development?.summary || ''"
   :suggestions="aiSuggestions.dimension_suggestions || {}"
   :loading="aiLoading"
-  :mode="aiSuggestions.suggestion_mode"
   :note="reportStatistics.statistics_note"
   :secondary-note="reportStatistics.secondary_note"
   :legacy-count="reportStatistics.legacy_assessment_count || 0"
@@ -702,7 +701,7 @@ async function loadAssessments() {
   region.value = data.region || null
   summary.value = data.summary || {}
   reportStatistics.value = data
-  aiSuggestions.value = { level_suggestions: {}, dimension_suggestions: {}, suggestion_mode: "", development: { summary: "", conclusion: "" } }
+  aiSuggestions.value = { level_suggestions: {}, dimension_suggestions: {}, development: { summary: "", conclusion: "" } }
   assessments.value = (data.assessments || []).map(normalizeAssessment)
 }
 
@@ -725,7 +724,6 @@ async function loadAISuggestions() {
 
     aiSuggestions.value = {
       dimension_suggestions: data.dimension_suggestions || {},
-      suggestion_mode: data.suggestion_mode || "",
       level_suggestions: {
         initial: data.level_suggestions?.initial || "",
         growing: data.level_suggestions?.growing || "",

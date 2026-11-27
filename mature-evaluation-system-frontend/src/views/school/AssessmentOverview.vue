@@ -59,7 +59,7 @@
             <div class="progress-footer">
               <div class="time-box">
                 <span>开始时间：{{ formatDate(activeAssessment.created_at) }}</span>
-                <span class="deadline">截止时间：{{ getDeadline(activeAssessment.created_at) }}</span>
+                <span v-if="!activeAssessment.check_survey_quality" class="deadline">截止时间：{{ getDeadline(activeAssessment.created_at) }}</span>
               </div>
               <el-button type="warning" size="large" class="continue-btn" @click="handleContinue">
                 继续评估
@@ -86,6 +86,9 @@
               </template>
             </el-table-column>
             <el-table-column prop="school_name" label="学校名称" min-width="150" />
+            <el-table-column label="问卷回收情况" min-width="240">
+              <template #default="{ row }"><SurveyCollection :counts="row.survey_collection" /></template>
+            </el-table-column>
             <el-table-column label="评估时间" width="200">
               <template #default="scope">
                 <!-- 对应准确的评估时间 -->
@@ -172,6 +175,7 @@
 </template>
 
 <script setup>
+import SurveyCollection from '@/components/SurveyCollection.vue'
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'

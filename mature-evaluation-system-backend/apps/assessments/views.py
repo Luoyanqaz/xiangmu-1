@@ -20,7 +20,9 @@ from apps.regions.utils.generators import gen_unique_school_username, gen_strong
 from django.db import transaction
 from apps.schools.models import School
 import logging
-from apps.surveys.models import SurveyInstance, SurveyResponse
+from apps.surveys.models import SurveyInstance
+from apps.surveys.quality import collection
+from .services.submission import submit_round
 from .scoring_service import  ScoringService
 
 from ..accounts.models import User
@@ -34,7 +36,7 @@ def finalize_expired_draft_assessments(queryset):
     """将超过填报期限仍未提交的评估按 0 分结算。"""
     cutoff = timezone.now() - timedelta(hours=ASSESSMENT_DURATION_HOURS)
     expired_ids = list(
-        queryset.filter(status='draft', created_at__lte=cutoff)
+        queryset.filter(status='draft', created_at__lte=cutoff, check_survey_quality=False)
         .values_list('id', flat=True)
     )
 
@@ -120,16 +122,9 @@ class AssessmentViewSet(viewsets.ModelViewSet):
         secondary_scores = details.get('secondary_scores', {})
         observation_scores = details.get('observation_scores', {})
 
-        participant_counts = {
-            'teacher': SurveyResponse.objects.filter(
-                instance__assessment=assessment,
-                instance__template__survey_type='teacher'
-            ).count(),
-            'student': SurveyResponse.objects.filter(
-                instance__assessment=assessment,
-                instance__template__survey_type='student'
-            ).count(),
-        }
+        counts = collection(assessment)
+        participant_counts = {role: values['received'] if values['valid'] is None else values['valid']
+                              for role, values in counts.items()}
 
         # 报告页需要展示真实的全库平均分，避免前端长期使用 3.00 兜底值。
         from apps.reports.report_data_service import ReportDataService
@@ -173,6 +168,7 @@ class AssessmentViewSet(viewsets.ModelViewSet):
 
             # 问卷参评人数
             'participant_counts': participant_counts,
+            'survey_collection': counts,
 
             # 模块基础数据
             'assessment': AssessmentSerializer(assessment).data,
@@ -548,12 +544,11 @@ class AssessmentViewSet(viewsets.ModelViewSet):
         # TODO: 添加数据完整性检查
         
         # 更新状态为数据收集完成
-        assessment.status = 'collecting'
-        assessment.save()
-        
         # 触发异步计分任务
         from .tasks import calculate_assessment_scores
-        task = calculate_assessment_scores.delay(assessment.id)
+        task = submit_round(assessment, calculate_assessment_scores)
+        if task is None:
+            return Response({'error': '本轮评估已经提交'}, status=400)
         
         logger.info(f"评估 {assessment.id} 已提交，任务ID: {task.id}")
         

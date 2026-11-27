@@ -27,17 +27,41 @@
         >
           <span class="region-name">{{ region.displayName }}</span>
 
-          <el-button
-            link
-            type="primary"
-            @click="viewRegionReport(region)"
-          >
-            查看区域报告
-          </el-button>
+          <div class="region-actions">
+            <el-button link type="primary" @click="viewRegionReport(region)">查看区域报告</el-button>
+            <el-button link type="primary" @click="showCollection(region)">问卷回收情况</el-button>
+          </div>
         </div>
       </div>
       </el-card>
     </div>
+
+    <el-drawer v-model="collectionOpen" :title="(collectionRegion?.district || '') + ' · 问卷回收情况'"
+               size="min(520px, 100%)">
+      <p v-if="collectionLoading" role="status">正在加载问卷回收情况…</p>
+      <div v-else-if="collectionError" role="alert">
+        问卷回收情况加载失败。
+        <el-button link type="primary" @click="showCollection(collectionRegion)">重试</el-button>
+      </div>
+      <template v-else-if="collection">
+        <div class="collection-table-wrap">
+          <table class="collection-table">
+            <thead><tr><th>问卷类型</th><th>回收总数</th><th>有效</th><th>无效</th><th>历史未判定</th></tr></thead>
+            <tbody>
+              <tr v-for="(label, role) in { teacher: '教师问卷', student: '学生问卷' }" :key="role">
+                <th scope="row">{{ label }}</th>
+                <td>{{ collection[role].received }}</td><td>{{ collection[role].valid }}</td>
+                <td>{{ collection[role].invalid }}</td><td>{{ collection[role].unjudged }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="collection-note">每所学校取最近一次已完成评估。历史未判定指启用有效性校验前回收的问卷。</p>
+        <p v-if="collection.shortages.teacher || collection.shortages.student || collection.shortages.both">
+          有效样本不足学校：仅教师 {{ collection.shortages.teacher }} 所，仅学生 {{ collection.shortages.student }} 所，两类均不足 {{ collection.shortages.both }} 所。
+        </p>
+      </template>
+    </el-drawer>
 
     <!-- 2. 学校评估列表及筛选 -->
     <el-card shadow="never" class="list-section">
@@ -332,16 +356,37 @@ const getDistrictRegions = (province) => {
   return result
 }
 
+const regionParams = ({ region_id, province, city, district }) => ({ region_id, province, city, district })
+
 const viewRegionReport = (region) => {
   router.push({
     path: '/admin/region-report-detail',
-    query: {
-      region_id: region.region_id || '',
-      province: region.province || '',
-      city: region.city || '',
-      district: region.district || ''
-    }
+    query: regionParams(region)
   })
+}
+
+const collectionOpen = ref(false)
+const collectionRegion = ref(null)
+const collection = ref(null)
+const collectionLoading = ref(false)
+const collectionError = ref(false)
+let collectionRequest = 0
+
+const showCollection = async (region) => {
+  const requestId = ++collectionRequest
+  collectionRegion.value = region
+  collectionOpen.value = true
+  collectionLoading.value = true
+  collectionError.value = false
+  collection.value = null
+  try {
+    const response = await request.get('/admin/region-report/survey-collection/', { params: regionParams(region) })
+    if (requestId === collectionRequest) collection.value = response.data
+  } catch {
+    if (requestId === collectionRequest) collectionError.value = true
+  } finally {
+    if (requestId === collectionRequest) collectionLoading.value = false
+  }
 }
 
 /* ======================
@@ -499,6 +544,9 @@ onMounted(() => {
 }
 
 .region-item {
+  box-sizing: border-box;
+  flex-wrap: wrap;
+  gap: 8px;
   width: calc(33.33% - 10px);
   background-color: #f8fbff;
   border: 1px solid #e1f0ff;
@@ -514,6 +562,17 @@ onMounted(() => {
   color: #303133;
   font-weight: 500;
 }
+
+.region-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.region-actions .el-button { margin: 0; }
+.collection-table-wrap { overflow-x: auto; }
+.collection-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.collection-table th, .collection-table td {
+  padding: 12px 8px; text-align: right; white-space: nowrap; border-bottom: 1px solid #e4e9f0;
+}
+.collection-table th:first-child { text-align: left; }
+.collection-table thead { background: #f4f7fb; }
+.collection-note { color: #606266; font-size: 14px; line-height: 1.6; }
 
 /* 列表筛选区 */
 .list-section {
@@ -632,5 +691,8 @@ onMounted(() => {
 /* 响应式适配 */
 @media (max-width: 1200px) {
   .region-item { width: calc(50% - 10px); }
+}
+@media (max-width: 700px) {
+  .region-item { width: 100%; }
 }
 </style>

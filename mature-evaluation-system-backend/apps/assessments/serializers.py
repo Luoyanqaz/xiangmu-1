@@ -4,6 +4,7 @@
 from rest_framework import serializers
 from .models import Assessment, InstitutionAssessment, BehaviorAssessment, AssetAssessment, TechnologyAssessment
 from apps.assessments.services.module_status import compute_module_status
+from apps.surveys.quality import collection
 
 
 class AssessmentSerializer(serializers.ModelSerializer):
@@ -16,6 +17,10 @@ class AssessmentSerializer(serializers.ModelSerializer):
     progress_rate = serializers.SerializerMethodField()
     # 模块详细状态字段
     module_status = serializers.SerializerMethodField()
+    survey_collection = serializers.SerializerMethodField()
+
+    def get_survey_collection(self, obj):
+        return collection(obj)
 
     def get_module_status(self, obj):
         # 假设 compute_module_status 返回类似 {'literacy': True, 'institution': False, ...}
@@ -42,7 +47,7 @@ class AssessmentSerializer(serializers.ModelSerializer):
             'asset_score', 'technology_score', 'total_score',
             'maturity_level', 'maturity_level_display', 'report_file',
             'started_at', 'completed_at', 'created_at', 'updated_at',
-            'module_status', 'progress_rate'  # <--- 确保这里加上了 progress_rate
+            'module_status', 'progress_rate', 'survey_collection', 'check_survey_quality'
         ]
         read_only_fields = [
             'school', 'literacy_score', 'institution_score', 'behavior_score',

@@ -1,19 +1,13 @@
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import BasePermission, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.permissions import IsPlatformAdmin
 from apps.regions.models import Region
 from apps.schools.models import School
 from .school_type_statistics import school_type_statistics
 from .statistics_views import resolve_report_region
-
-
-class IsPlatformAdmin(BasePermission):
-    message = '只有平台管理员可以查看学校类型评估报告'
-
-    def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.role == 'admin'
 
 
 class SchoolTypeReportOptionsView(APIView):

@@ -48,7 +48,7 @@
         </div>
         <div v-if="dimension.key === 'institution' || dimension.key === 'technology'" class="observation-charts">
           <figure v-for="group in dimension.secondary_indicators" :key="group.key" class="observation-chart">
-            <figcaption>{{ group.key === 'E2' ? '数据安全水平' : group.label }}</figcaption>
+            <figcaption>{{ group.label }}</figcaption>
             <div class="bar-unit">区域均分（分）</div>
             <div class="bar-plot">
               <div v-for="tick in [0, 1, 2, 3, 4, 5]" :key="tick" class="bar-gridline"
@@ -65,10 +65,11 @@
         </div>
         <div v-if="dimension.key === 'behavior'" class="behavior-charts">
           <div class="behavior-monitor">
-            <h4>数据行为监测得分</h4>
+            <h4>{{ behaviorMonitor.label }}</h4>
             <div :ref="el => setRadarElement('C1', el)" class="behavior-chart" role="img" :aria-label="radarDescription(behaviorMonitor)"></div>
           </div>
           <div class="behavior-effect">
+            <h4>{{ behaviorRadar.label }}</h4>
             <div :ref="el => setRadarElement('C2', el)" class="behavior-chart" role="img" :aria-label="radarDescription(behaviorRadar)"></div>
             <div v-if="!behaviorRadar.complete" class="radar-missing">
               <p>暂无完整三维数据</p>
@@ -109,7 +110,7 @@
           </div>
         </div>
         <div class="dimension-advice">
-          <h4><span class="advice-icon" aria-hidden="true">!</span>针对{{ dimension.label }}维度的发展建议 <span v-if="sourceLabel" class="advice-source">{{ sourceLabel }}</span></h4>
+          <h4><span class="advice-icon" aria-hidden="true">!</span>针对{{ dimension.label }}维度的发展建议</h4>
           <p>{{ dimension.count ? (suggestions[dimension.key] || (loading ? '正在生成发展建议…' : '发展建议暂未获取，请刷新重试。')) : '暂无有效评估数据，暂不作发展判断；建议先完成数据采集与核验。' }}</p>
         </div>
       </div>
@@ -120,13 +121,8 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import * as echarts from 'echarts'
-const props = defineProps({ statistics: { type: Array, default: () => [] }, suggestions: { type: Object, default: () => ({}) }, loading: Boolean, mode: String, note: String, secondaryNote: String, legacyCount: Number, developmentSummary: String })
+const props = defineProps({ statistics: { type: Array, default: () => [] }, suggestions: { type: Object, default: () => ({}) }, loading: Boolean, note: String, secondaryNote: String, legacyCount: Number, developmentSummary: String })
 const displayNote = computed(() => (props.note || '').replace('；同分并列位次（1、1、3）', ''))
-const sourceLabel = computed(() => {
-  if (props.loading) return '生成中'
-  if (props.mode === 'mixed') return '本报告含 AI 与本地建议'
-  return props.mode === 'ai' ? 'AI建议' : ''
-})
 const colors = {
   literacy: ['#709ce0', '#f0f5fd'], institution: ['#6eb7b2', '#eff9f8'],
   behavior: ['#c8a15d', '#fcf8ef'], asset: ['#a18fc7', '#f7f4fc'], technology: ['#88c391', '#f3fcf6']
@@ -169,7 +165,7 @@ function observationGroup(dimension, key, label, axes) {
   })
   return { key, label, color: '#4096ef', points, complete: points.every(point => point.average !== null) }
 }
-const behaviorMonitor = computed(() => observationGroup('behavior', 'C1', '数据行为监测得分', [
+const behaviorMonitor = computed(() => observationGroup('behavior', 'C1', '数据行为监测', [
   ['C11', '教师数据行为'], ['C12', '学生数据行为']
 ]))
 const behaviorRadar = computed(() => observationGroup('behavior', 'C2', '数据应用成效', [
@@ -309,7 +305,7 @@ h4 { margin: 0 0 10px; font-size: 15px; font-weight: 900; }
 .rank-table th:first-child,.rank-table td:first-child { width: 64px; min-width: 64px; white-space: nowrap; }
 .secondary-block { margin: 25px 0; }.mean-cell { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }.score-track { width: 65px; height: 5px; background: #e7eef9; border-radius: 5px; overflow: hidden; }.score-track>span { display: block; background: #4d7fca; height: 100%; }
 .dimension-advice { padding: 16px; background: #eef7fe; border-left: 3px solid #6aa5df; border-radius: 5px; }.dimension-advice h4 { color: #294f76; }.dimension-advice p { margin: 0; padding: 14px; background: white; line-height: 1.9; font-size: 14px; white-space: pre-line; border-radius: 4px; }
-.advice-source { font-size: 11px; color: #64748b; font-weight: normal; margin-left: 8px; }.table-scroll { overflow-x: auto; }
+.table-scroll { overflow-x: auto; }
 .advice-icon {
   display: inline-flex;
   align-items: center;
@@ -353,8 +349,8 @@ h4 { margin: 0 0 10px; font-size: 15px; font-weight: 900; }
 .behavior-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin: 28px 0; break-inside: avoid; }
 .behavior-monitor, .behavior-effect { min-width: 0; padding: 18px 8px 8px; border-radius: 8px; }
 .behavior-monitor { background: #eff5fe; }
-.behavior-effect { background: #f7f7fa; display: flex; flex-direction: column; justify-content: center; }
-.behavior-monitor h4 { text-align: center; color: #444; font-size: 17px; margin-bottom: 10px; }
+.behavior-effect { background: #f7f7fa; }
+.behavior-charts h4 { text-align: center; color: #444; font-size: 17px; margin-bottom: 10px; }
 .behavior-chart { height: 280px; width: 100%; }
 @media (max-width: 760px) { .behavior-charts { grid-template-columns: 1fr; } }
 .observation-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 22px; margin: 28px 0; }
