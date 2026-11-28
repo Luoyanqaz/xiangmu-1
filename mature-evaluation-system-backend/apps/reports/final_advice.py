@@ -9,7 +9,7 @@ from django.conf import settings
 from apps.assessments.maturity import MATURITY_LABELS, determine_maturity_level
 from .statistics import DIMENSIONS, REGIONAL_OBSERVATIONS, valid_score
 
-VERSIONS = ('20261120', '20261124', '20261126', '20261127')
+VERSIONS = ('20261120', '20261124', '20261126', '20261127', '20261128')
 SOURCE = Path(__file__).parent / 'prompts'
 logger = logging.getLogger(__name__)
 BANDS = {'leading': '非常优秀', 'mature': '较为优秀', 'growing': '比较良好', 'initial': '有待提升'}
@@ -44,6 +44,41 @@ for prefix, who in [('A1', '教师'), ('A3', '学生')]:
 
 SCHOOL_ACTORS = dict(zip((row[0] for row in DIMENSIONS),
                          ('教研组', '校办', '教务处', '信息中心', '信息中心')))
+
+REGION_ACTORS = {
+    'literacy': '区教师发展中心', 'institution': '区教育行政部门',
+    'behavior': '区教师发展中心', 'asset': '区域教育信息化技术支持单位',
+    'technology': '区域教育信息化技术支持单位',
+}
+REGION_ACTIONS = {
+    'B11': '指导学校明确数据工作小组的成员职责', 'B12': '对照各校工作台账梳理任务跟进中的共性问题',
+    'B21': '梳理各校数据管理岗位缺口', 'B22': '围绕数据维护与授权流程安排岗位研修',
+    'B31': '指导学校完善数据采集和共享制度', 'B32': '汇集校内应用场景并指导学校编写操作指南',
+    'C11': '引导教师在跨校备课中解读教学数据', 'C12': '指导学校设计学生记录和解释数据的学习任务',
+    'C21': '梳理各校数据应用成果及适用条件', 'C22': '协调学校交流成果应用范围与推广经验',
+    'C23': '汇集教师对应用效果的反馈并分析共性问题',
+    'D11': '指导学校辨识教学和管理数据的价值', 'D12': '梳理校际数据资源复用需求',
+    'D13': '指导学校厘清资源归档与授权职责', 'D21': '按类别汇总各校资源存量',
+    'D22': '核对校际人均资源差异并协调资源共享',
+    'E11': '汇总各校硬件缺口并协调设备更新', 'E12': '梳理跨校平台接口与数据互通需求',
+    'E21': '指导学校核查等保与认证材料', 'E22': '汇总风险事件并指导学校完善处置流程',
+}
+
+
+def nov28_action(code, dimension, region):
+    if dimension == 'literacy':
+        who = '教师' if code.startswith('A1') else '学生'
+        task = ('从真实问题中提出可用数据验证的问题', '练习数据采集与分析',
+                '比较数据来源并交流判断依据', '用数据检验实际问题的解决方案',
+                '辨识隐私风险并练习脱敏处理')[int(code[-1]) - 1]
+        return ('指导各校带领' if region else '引导') + who + task
+    if region:
+        return REGION_ACTIONS[code]
+    if code == 'B22':
+        return '围绕数据维护、授权与共享安排岗位研修'
+    if code == 'C22':
+        return '交流数据应用成果的使用范围和推广经验'
+    return ACTIONS[code]
 
 
 def enabled():
@@ -101,7 +136,7 @@ def summary_nov24(total, overall, region, *, version):
         intro = f'{subject}数据文化得分为{total:.2f}分，成熟度等级为{MATURITY_LABELS[grade]}。{actor}{STAGES[grade]}。'
     else:
         intro = f'{subject}暂无有效数据文化总分。'
-    limit_to_three = version in ('20261126', '20261127')
+    limit_to_three = version in ('20261126', '20261127', '20261128')
     summary = intro + '其中，' + describe_nov24(overall, mark_uniform_low=limit_to_three)
     low = [row for row in overall if row[2] is not None and row[2] < 3]
     # 26 日按指标顺序选取；27 日优先最低分，同分沿用指标顺序。
@@ -111,7 +146,7 @@ def summary_nov24(total, overall, region, *, version):
         low = low[:3]
     if low:
         names = '、'.join(name for _, name, _ in low)
-        if version == '20261127' or (region and version == '20261126'):
+        if version in ('20261127', '20261128') or (region and version == '20261126'):
             names += '等方面'
         if region:
             return summary + f'当前短板主要集中在{names}，区域教育管理部门可依托实践基础较好的学校，围绕薄弱维度开展分类指导、组织跨校研修，推动高水平学校发挥示范作用。'
@@ -169,20 +204,23 @@ def read_actions(response):
     return obj if isinstance(obj, dict) else {}
 
 
-def join_actor_actions(selected, actors, actions):
+def join_actor_actions(selected, actors, actions, *, separate_tasks=False):
     grouped = {}
     for code, _, _ in selected:
         grouped.setdefault(actors[code], []).append(actions[code])
     clauses = []
     for actor, steps in grouped.items():
-        phrase = '，'.join(steps[:-1]) + '，并' + steps[-1] if len(steps) > 1 else steps[0]
+        if separate_tasks:
+            phrase = '；'.join(steps)
+        else:
+            phrase = '，'.join(steps[:-1]) + '，并' + steps[-1] if len(steps) > 1 else steps[0]
         clauses.append(f'由{actor}{phrase}')
     return '；'.join(clauses)
 
 
 def generate(data, llm, *, region=False):
     version = settings.REPORT_ADVICE_VERSION
-    actor_actions = version in ('20261126', '20261127')
+    actor_actions = version in ('20261126', '20261127', '20261128')
     revised = version == '20261124' or actor_actions
     scope = 'region' if region else 'school'
     subject = '该区域' if region else '该校'
@@ -209,7 +247,11 @@ def generate(data, llm, *, region=False):
     actors = {}
     for selected in selections.values():
         for code, _, _ in selected:
-            if actor_actions:
+            if version == '20261128':
+                dimension = owners[code]
+                actors[code] = (REGION_ACTORS if region else SCHOOL_ACTORS)[dimension]
+                actions[code] = nov28_action(code, dimension, region)
+            elif actor_actions:
                 actors[code] = '区域教育管理部门' if region else SCHOOL_ACTORS[owners[code]]
                 actions[code] = ('指导参评学校' if region else '') + ACTIONS[code]
             else:
@@ -225,7 +267,7 @@ def generate(data, llm, *, region=False):
         }, ensure_ascii=False, default=str)
         if actor_actions:
             role = '区域教育管理部门或区域内的教研、技术支持机构' if region else '该校的校内部门或岗位'
-            if version == '20261127':
+            if version in ('20261127', '20261128'):
                 role += '，如区域教师发展中心、教育行政部门' if region else '，如教务处、学科教研组、年级组'
             prompt += (f'\n本次报告的实施主体须为{role}。程序负责得分、判档、总评和段落衔接。'
                        '仅为选中的每个观测点编号返回一行 JSON，例如 '
@@ -271,7 +313,7 @@ def generate(data, llm, *, region=False):
 
     def measures(selected):
         if actor_actions:
-            return join_actor_actions(selected, actors, actions)
+            return join_actor_actions(selected, actors, actions, separate_tasks=version == '20261128')
         return '，'.join(actions[code] for code, _, _ in selected)
 
     if revised:

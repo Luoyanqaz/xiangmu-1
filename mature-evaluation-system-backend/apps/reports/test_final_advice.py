@@ -25,6 +25,30 @@ class FinalAdviceTests(SimpleTestCase):
         self.assertIn('数据硬件设施、数据系统平台均表现非常优秀', result['technology'])
         llm._call_api.assert_not_called()
 
+    @override_settings(REPORT_ADVICE_VERSION='20261128')
+    def test_nov28_school_and_region_actions_online_and_offline(self):
+        self.data['observation_scores'] = dict.fromkeys(self.data['observation_scores'], 2)
+        regional = {'summary': {'avg_score': 2}, 'dimension_statistics': [
+            {'key': key, 'average': 2, 'secondary_indicators': [
+                {'key': child, 'average': 2, 'observation_indicators': [
+                    {'key': code, 'average': 2} for code in REGIONAL_OBSERVATIONS[child]]}
+                for child, _ in children]} for key, _, children in DIMENSIONS]}
+        for region, data in ((False, self.data), (True, regional)):
+            with self.subTest(region=region):
+                model = Mock()
+                result, mode, sources = final_advice.generate(data, model, region=region)
+                model._call_api.assert_not_called()
+                self.assertEqual(mode, 'fallback')
+                self.assertEqual(set(sources), set(self.data['observation_scores']))
+                self.assertIn('由区域教育信息化技术支持单位' if region else '由信息中心', result['technology'])
+                model._call_api.return_value = '{"E11":{"actor":"设备组","action":"核查教学终端的配置"}}'
+                with override_settings(LLM_ALLOW_NETWORK=True):
+                    result, mode, sources = final_advice.generate(data, model, region=region)
+                self.assertIn('提出区域层面可采取的改进措施' if region else '提出学校可采取的改进措施',
+                              model._call_api.call_args.args[0])
+                self.assertEqual((mode, sources['E11'], sources['E12']), ('mixed', 'ai', 'fallback'))
+                self.assertIn('由设备组核查教学终端的配置', result['technology'])
+
     def test_boundary_ties_missing_values_and_lowest_two(self):
         self.data['dimension_scores'].update(asset=1.5, technology=1.5, behavior=1.5)
         self.data['observation_scores'].update(E11=0, E12=None, E21=1.5, E22=1.5)
